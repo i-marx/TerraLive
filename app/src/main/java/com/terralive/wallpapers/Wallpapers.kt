@@ -20,12 +20,13 @@ object Wallpapers {
             "earth",
             "The Planet",
             "Earth from orbit in real time — live clouds, true night sky, real Moon"
-        ),
-        WallpaperInfo(
+        )
+        /* hidden until refined — flip this back on in an update:
+        ,WallpaperInfo(
             "clouds",
             "Drifting Clouds",
             "Volumetric ray-marched cumulus at true drift speed — real 24-hour sky, stars and moon at night"
-        )
+        ) */
         // coming soon: more places on Earth — oceans, mountains, rain...
     )
 
