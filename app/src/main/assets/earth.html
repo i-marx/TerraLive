@@ -237,6 +237,8 @@ const URLS = {
           'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'],
   water: ['https://unpkg.com/three-globe/example/img/earth-water.png',
           'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-water.png'],
+  topo: ['https://unpkg.com/three-globe/example/img/earth-topology.png',
+         'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png'],
   /* REAL near-realtime cloud cover from EUMETSAT/NOAA satellites (clouds.matteason.co.uk) */
   cloudsLive: ['https://clouds.matteason.co.uk/images/8192x4096/clouds-alpha.png',
                'https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png',
@@ -266,8 +268,10 @@ const earthUniforms = {
   nightMap: { value: flatTex('#000000') },
   waterMap: { value: flatTex('#333333') },
   cloudMap: { value: flatTex('#000000') },
+  topoMap : { value: flatTex('#000000') },
   uHasWater:{ value: 0.0 },
   uHasNight:{ value: 0.0 },
+  uHasTopo :{ value: 0.0 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
   sunDir  : { value: new THREE.Vector3(1,0,0) }
@@ -285,21 +289,35 @@ const earthMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform sampler2D dayMap; uniform sampler2D nightMap; uniform sampler2D waterMap;
-    uniform sampler2D cloudMap;
+    uniform sampler2D cloudMap; uniform sampler2D topoMap;
     uniform float uHasWater; uniform float uHasNight; uniform float uHasClouds;
-    uniform float uCloudShift; uniform vec3 sunDir;
+    uniform float uHasTopo; uniform float uCloudShift; uniform vec3 sunDir;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
-      vec3 n  = normalize(vN);
+      vec3 nGeo = normalize(vN);
+      vec3 n = nGeo;
       vec3 vd = normalize(cameraPosition - vWP);
+      /* terrain relief: perturb the normal with real elevation data so
+         mountain ranges catch the light (the 'Apple Earth' look) */
+      if(uHasTopo > 0.5){
+        vec3 east  = normalize(cross(vec3(0.0,1.0,0.0), nGeo) + vec3(1e-5));
+        vec3 north = cross(nGeo, east);
+        float e0 = texture2D(topoMap, vUv).r;
+        float ex = texture2D(topoMap, vUv + vec2(0.0007, 0.0)).r;
+        float ey = texture2D(topoMap, vUv + vec2(0.0, 0.0014)).r;
+        n = normalize(nGeo - (east*(ex - e0) + north*(ey - e0)) * 12.0);
+      }
       float ca = dot(n, sunDir);
       float daylight = max(ca, 0.0);
-      float dmix = smoothstep(-0.1, 0.15, ca);
+      float dmix = smoothstep(-0.1, 0.15, dot(nGeo, sunDir));
       /* work in linear light like a real camera pipeline */
       vec3 day = pow(texture2D(dayMap, vUv).rgb, vec3(2.2));
-      vec3 sunCol = vec3(1.0, 0.965, 0.91);
-      vec3 col = day * sunCol * (pow(daylight, 1.05) * 2.6 + 0.0012);
+      vec3 sunCol = vec3(1.0, 0.97, 0.93);
+      vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
+      /* broad soft sheen on oceans (no hotspot) */
+      float wm = mix(0.22, texture2D(waterMap, vUv).r, uHasWater);
+      col += sunCol * pow(max(dot(reflect(-sunDir, n), vd), 0.0), 8.0) * wm * dmix * 0.10;
       /* cloud shadows: sample the cloud layer displaced along the sun direction */
       if(uHasClouds > 0.5){
         vec3 east  = normalize(cross(vec3(0.0,1.0,0.0), n) + vec3(1e-5));
@@ -319,20 +337,19 @@ const earthMat = new THREE.ShaderMaterial({
       col *= mix(vec3(1.0), vec3(1.10, 0.93, 0.82), tw * 0.3);
       /* city lights on the night side */
       vec3 night = pow(texture2D(nightMap, vUv).rgb, vec3(2.2));
-      col += night * vec3(1.0, 0.74, 0.42) * (1.0 - dmix) * 2.4 * uHasNight;
-      /* atmospheric scattering: blue haze thickening toward the limb */
-      float mu = max(dot(n, vd), 0.0);
+      col += night * vec3(1.0, 0.76, 0.45) * (1.0 - dmix) * 2.0 * uHasNight;
+      /* atmospheric scattering: soft haze thickening toward the limb */
+      float mu = max(dot(nGeo, vd), 0.0);
       float haze = pow(1.0 - mu, 2.0);
-      col = mix(col, vec3(0.32, 0.52, 0.95) * (0.95*dmix + 0.02), haze * 0.42);
-      /* bright inner rim */
-      col += vec3(0.28, 0.52, 1.0) * pow(1.0 - mu, 4.5) * (0.85*dmix + 0.03);
-      /* cool cinematic grade + filmic curve */
-      col = mix(col, col * vec3(0.92, 0.99, 1.10), 0.22);
+      col = mix(col, vec3(0.40, 0.58, 0.95) * (0.95*dmix + 0.02), haze * 0.32);
+      /* bright inner rim - whiter, like the real atmosphere */
+      col += vec3(0.55, 0.75, 1.05) * pow(1.0 - mu, 4.5) * (0.7*dmix + 0.03);
+      /* natural-colour grade + filmic curve */
+      col = mix(col, col * vec3(0.96, 1.00, 1.05), 0.10);
       col = aces(col);
-      /* 'polarized' pop: rich saturation, deep dark shadows */
       float lumi = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(lumi), col, 1.32);
-      col = pow(col, vec3(1.22));
+      col = mix(vec3(lumi), col, 1.14);
+      col = pow(col, vec3(1.08));
       col = pow(col, vec3(1.0/2.2));
       gl_FragColor = vec4(col, 1.0);
     }`
@@ -357,10 +374,10 @@ const cloudMat = new THREE.ShaderMaterial({
     void main(){
       float l = max(dot(normalize(vN), sunDir), 0.0);
       vec4 t = texture2D(map, vUv);
-      float a = t.r * t.a;
-      vec3 c = vec3(1.0, 0.99, 0.97) * (l * 2.5 + 0.005);
+      float a = pow(t.r * t.a, 0.85);   // crisper cloud edges
+      vec3 c = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
       c = pow(aces(c), vec3(1.0/2.2));
-      gl_FragColor = vec4(c, a * 0.92);
+      gl_FragColor = vec4(c, a * 0.94);
     }`
 });
 const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.006, 256, 256), cloudMat);
@@ -384,7 +401,7 @@ const atmoMat = new THREE.ShaderMaterial({
     void main(){
       float i = pow(clamp(0.68 - dot(vNV, vec3(0.0,0.0,1.0)), 0.0, 1.3), 3.2);
       float sf = clamp(dot(normalize(vWP), sunDir) * 0.65 + 0.35, 0.03, 1.0);
-      gl_FragColor = vec4(vec3(0.30, 0.58, 1.10) * i * sf * 1.0, 1.0);
+      gl_FragColor = vec4(vec3(0.45, 0.65, 1.05) * i * sf * 0.9, 1.0);
     }`
 });
 scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.075, 192, 192), atmoMat));
@@ -575,10 +592,11 @@ const planetSprites = {};
 
 /* ---------- load imagery ---------- */
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
-             loadClouds(), loadTex(URLS.moon)]).then(([d,nt,w,c,m])=>{
+             loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
   if(d){ earthUniforms.dayMap.value = d; }
   if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
+  if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
   if(c){
     c.wrapS = c.wrapT = THREE.RepeatWrapping;
     cloudUniforms.map.value = c; clouds.visible = true;
