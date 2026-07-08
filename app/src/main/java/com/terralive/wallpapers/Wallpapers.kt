@@ -20,8 +20,13 @@ object Wallpapers {
             "earth",
             "The Planet",
             "Earth from orbit in real time — live clouds, true night sky, real Moon"
+        ),
+        WallpaperInfo(
+            "clouds",
+            "Drifting Clouds",
+            "Fluffy summer clouds at true drift speed — real 24-hour sky from your clock"
         )
-        // coming soon: places ON Earth — oceans, mountains, skies...
+        // coming soon: more places on Earth — oceans, mountains, rain...
     )
 
     fun assetUrl(id: String) = "file:///android_asset/wallpapers/$id/index.html"
