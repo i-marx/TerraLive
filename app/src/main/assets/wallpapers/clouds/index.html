@@ -82,17 +82,17 @@ float fbm3(vec2 p){
 }
 vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
 
-/* compact cauliflower cumulus */
+/* compact cauliflower cumulus with billowy multi-scale edges */
 float cumulus(vec2 uv, float scale, float off, float cover, float wob){
   vec2 p = (uv + vec2(off, 0.0)) * scale;
   vec2 w = vec2(fbm4(p*0.7 + wob), fbm4(p*0.8 + 37.0));
-  float big = fbm3(p*0.5 + 11.0);
-  float mask = smoothstep(cover - 0.02, cover + 0.10, big);
-  float d = fbm4(p + (w - 0.5)*0.8);
-  d += 0.09 * fbm3(p*3.3 + w*2.0);
-  d += 0.04 * fbm3(p*7.9);
-  float t = smoothstep(cover - 0.02, cover + 0.09, d);
-  return clamp(t*mask*2.1, 0.0, 1.0) + t*0.07*(1.0 - mask);
+  float big = fbm3(p*0.75 + 11.0);          /* more, medium-size masses */
+  float mask = smoothstep(cover - 0.03, cover + 0.09, big);
+  float d = fbm4(p + (w - 0.5)*0.7);
+  d += 0.17 * fbm3(p*3.0 + w*2.0);          /* billowy boundary */
+  d += 0.09 * fbm3(p*6.8);                  /* small puffs on the edge */
+  float t = smoothstep(cover - 0.03, cover + 0.05, d);
+  return clamp(t*mask*2.6, 0.0, 1.0) + t*0.06*(1.0 - mask);
 }
 /* cauliflower interior lighting: lumpy self-shading across a mass */
 float lumps(vec2 uv, float scale, float off){
@@ -106,11 +106,11 @@ void main(){
 
   float dayF  = smoothstep(-8.0, 10.0, el);
   float glowF = exp(-abs(el)/9.0) * clamp((el + 9.0)/8.0, 0.0, 1.0);
-  vec3 dayZen  = vec3(0.10, 0.35, 0.86);
-  vec3 dayHor  = vec3(0.55, 0.76, 0.95);
+  vec3 dayZen  = vec3(0.07, 0.30, 0.84);
+  vec3 dayHor  = vec3(0.42, 0.66, 0.93);
   vec3 nightZen= vec3(0.004, 0.007, 0.022);
   vec3 nightHor= vec3(0.012, 0.020, 0.050);
-  float h = pow(clamp(f2.y, 0.0, 1.0), 0.65);
+  float h = pow(clamp(f2.y, 0.0, 1.0), 0.80);
   vec3 sky = mix( mix(nightHor, nightZen, h), mix(dayHor, dayZen, h), dayF );
   vec3 warm = vec3(1.0, 0.535, 0.275);
   sky += warm * glowF * pow(1.0 - h, 2.5) * 0.55;
@@ -164,7 +164,7 @@ void main(){
       float dS  = cumulus(uv + toL*0.035, 2.2, uOff*0.55, uCover - 0.03, uWob) * band;
       float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
       float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.28;
-      float lit = clamp(0.38 + 0.42*topness + (lumps(uv, 2.2, uOff*0.55)-0.45)*0.55, 0.0, 1.0);
+      float lit = clamp(0.32 + 0.50*topness + (lumps(uv, 2.2, uOff*0.55)-0.45)*0.55, 0.0, 1.0);
       vec3 cDay = mix(vec3(0.74,0.79,0.87), vec3(1.00,0.995,0.98), lit) + vec3(1.03,1.01,0.98)*rim;
       vec3 cNight = vec3(0.016,0.022,0.040)*(0.8+0.4*lit) + vec3(0.16,0.19,0.28)*rim*0.8;
       vec3 cCol = mix(cNight, cDay, dayF);
@@ -181,7 +181,7 @@ void main(){
       float dS  = cumulus(uv + toL*0.035, 1.4, uOff, uCover - 0.02, uWob) * band;
       float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
       float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.28;
-      float lit = clamp(0.38 + 0.42*topness + (lumps(uv, 1.4, uOff)-0.45)*0.55, 0.0, 1.0);
+      float lit = clamp(0.32 + 0.50*topness + (lumps(uv, 1.4, uOff)-0.45)*0.55, 0.0, 1.0);
       vec3 cDay = mix(vec3(0.70,0.76,0.85), vec3(1.02,1.00,0.985), lit) + vec3(1.03,1.01,0.98)*rim;
       vec3 cNight = vec3(0.018,0.024,0.044)*(0.8+0.4*lit) + vec3(0.18,0.21,0.30)*rim*0.8;
       vec3 cCol = mix(cNight, cDay, dayF);
@@ -242,10 +242,7 @@ function animate(){
   uniforms.uSunEl.value = s.el;
   uniforms.uSunPos.value.set(s.x, s.y);
   uniforms.uMoonPos.value.set(s.mx, s.my);
-  const t = Date.now() / 1000;
-  uniforms.uOff.value = (t / CFG.screenCross) % 2048;
-  uniforms.uWob.value = (t % 86400) * 0.002;
-  renderer.render(scene, camera);
+ e, camera);
 }
 animate();
 
