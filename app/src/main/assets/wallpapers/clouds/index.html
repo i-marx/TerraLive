@@ -239,4 +239,7 @@ animate();
 
 /* keep it a wallpaper: no interaction at all */
 for(const ev of ['contextmenu','wheel','touchmove','dblclick','selectstart'])
-  window.addEventListener(ev, e=>e.preventDefault(), { pa
+  window.addEventListener(ev, e=>e.preventDefault(), { passive:false });
+</script>
+</body>
+</html>
