@@ -17,24 +17,25 @@
 <script>
 'use strict';
 /* ============================================================
-   DRIFTING CLOUDS — calm 24-hour sky wallpaper
-   - Clouds drift at REAL average speed: fair-weather cumulus at
-     ~1.5 km altitude moving ~40 km/h crosses a ground observer's
-     field of view in about 4 minutes. Far layers move slower
-     (true parallax). Drift phase comes from the wall clock, so
-     the sky keeps moving even while the wallpaper is paused.
-   - Day/night follows the real Sun: solar elevation computed
-     from your device clock and date (declination + hour angle),
-     so dawn, gold, blue and night arrive when they really do,
-     shifting naturally with the seasons.
+   DRIFTING CLOUDS v3 — ultra-real 24-hour sky
+   - Three cloud genera: compact cauliflower CUMULUS with bright
+     tops, shaded bases and sun-side silver linings; a thin high
+     STRATUS veil; and an occasional heavy grey NIMBOSTRATUS deck.
+   - True drift pace: fair-weather cumulus (~1.5 km, ~40 km/h)
+     crosses the view in ~4 min; higher layers slower (parallax).
+     Drift phase runs off the wall clock.
+   - Real 24-h cycle from solar elevation (clock + date):
+     deep-blue summer day, golden-hour blush, and honest night —
+     near-black clouds silhouetted against sharp stars, with a
+     glowing moon that becomes the light source for cloud rims.
    ============================================================ */
 
 const CFG = {
-  latitude    : 54.7,     // used for the sun's height (default: Lithuania)
-  screenCross : 240,      // seconds for a near cloud to cross the screen (real-speed)
-  renderScale : 1.0,
+  latitude    : 54.7,     // sun height (default: Lithuania)
+  screenCross : 240,      // seconds for a near cloud to cross the screen
+  renderScale : 0.8,      // internal resolution (raise to 1.0 on strong GPUs)
   maxDPR      : 2.0,
-  cover       : 0.56      // cloudiness 0.45 (busy sky) .. 0.65 (few clouds)
+  cover       : 0.56      // cumulus cloudiness
 };
 
 let renderer;
@@ -47,18 +48,18 @@ const scene  = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 
 const uniforms = {
-  uRes   : { value: new THREE.Vector2(1,1) },
-  uOffs  : { value: new THREE.Vector3(0,0,0) },   // per-layer drift offsets (computed in JS doubles)
-  uWob   : { value: 0 },                          // slow shape evolution
-  uSunEl : { value: 30 },                         // solar elevation, degrees
-  uSunPos: { value: new THREE.Vector2(0.5,0.3) }, // screen position of the sun
-  uMoonPos:{ value: new THREE.Vector2(0.7,0.25) },
-  uCover : { value: CFG.cover }
+  uRes    : { value: new THREE.Vector2(1,1) },
+  uOff    : { value: 0 },
+  uWob    : { value: 0 },
+  uSunEl  : { value: 30 },
+  uSunPos : { value: new THREE.Vector2(0.5,0.3) },
+  uMoonPos: { value: new THREE.Vector2(0.62,0.6) },
+  uCover  : { value: CFG.cover }
 };
 
 const frag = `
 precision highp float;
-uniform vec2 uRes; uniform vec3 uOffs; uniform float uWob;
+uniform vec2 uRes; uniform float uOff; uniform float uWob;
 uniform float uSunEl; uniform vec2 uSunPos; uniform vec2 uMoonPos;
 uniform float uCover;
 
@@ -69,104 +70,166 @@ float vnoise(vec2 p){
   float a = hash21(i), b = hash21(i+vec2(1,0)), c = hash21(i+vec2(0,1)), d = hash21(i+vec2(1,1));
   return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
 }
-float fbm(vec2 p){
+float fbm4(vec2 p){
   float v = 0.0, a = 0.5;
-  for(int i=0;i<5;i++){ v += a*vnoise(p); p = p*2.13 + vec2(19.7, 7.3); a *= 0.52; }
+  for(int i=0;i<4;i++){ v += a*vnoise(p); p = p*2.13 + vec2(19.7, 7.3); a *= 0.52; }
+  return v;
+}
+float fbm3(vec2 p){
+  float v = 0.0, a = 0.5;
+  for(int i=0;i<3;i++){ v += a*vnoise(p); p = p*2.13 + vec2(19.7, 7.3); a *= 0.52; }
   return v;
 }
 vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
 
-/* fluffy cumulus layer: domain-warped fbm with soft coverage threshold */
-float cloud(vec2 uv, float scale, float off, float cover, float wob){
+/* compact cauliflower cumulus */
+float cumulus(vec2 uv, float scale, float off, float cover, float wob){
   vec2 p = (uv + vec2(off, 0.0)) * scale;
-  vec2 w = vec2(fbm(p*0.7 + wob), fbm(p*0.8 + 37.0 - wob));
-  /* large compact masses gate the detail: chunky cumulus, few stragglers */
-  float big = fbm(p*0.5 + 11.0);
+  vec2 w = vec2(fbm4(p*0.7 + wob), fbm4(p*0.8 + 37.0));
+  float big = fbm3(p*0.5 + 11.0);
   float mask = smoothstep(cover - 0.02, cover + 0.10, big);
-  float d = fbm(p + (w - 0.5)*1.1);
-  d += 0.08 * fbm(p*3.1 + w*2.0);
+  float d = fbm4(p + (w - 0.5)*0.8);
+  d += 0.09 * fbm3(p*3.3 + w*2.0);
+  d += 0.04 * fbm3(p*7.9);
   float t = smoothstep(cover - 0.02, cover + 0.09, d);
-  return clamp(t*mask*1.7, 0.0, 1.0) + t*0.10*(1.0 - mask);
+  return clamp(t*mask*1.8, 0.0, 1.0) + t*0.08*(1.0 - mask);
+}
+/* thin high veil */
+float stratus(vec2 uv, float off, float wob){
+  vec2 p = (uv + vec2(off*0.7, 0.0)) * 1.1;
+  float d = fbm4(vec2(p.x*0.8, p.y*3.4)) + 0.25*fbm3(vec2(p.x*2.4, p.y*7.0));
+  return smoothstep(0.52, 0.78, d) * 0.55;
+}
+/* occasional heavy grey deck */
+float nimbo(vec2 uv, float off, float wob){
+  vec2 p = (uv + vec2(off*0.85, 0.0)) * 0.9;
+  float deck = smoothstep(0.63, 0.74, fbm3(vec2(p.x*0.35 + 50.0 + wob*0.3, p.y*0.8 + 50.0)));
+  float tex = 0.55 + 0.45*fbm3(vec2(p.x*2.0, p.y*2.6));
+  return deck * tex;
 }
 
 void main(){
-  vec2 frag2 = gl_FragCoord.xy / uRes;
-  vec2 uv = vec2(frag2.x * uRes.x/uRes.y, frag2.y);   /* aspect-true x, y: 0 bottom .. 1 top */
+  vec2 f2 = gl_FragCoord.xy / uRes;
+  vec2 uv = vec2(f2.x * uRes.x/uRes.y, f2.y);
   float el = uSunEl;
 
-  /* ---------- sky gradient through the whole day ---------- */
-  float dayF   = smoothstep(-8.0, 10.0, el);                 /* night -> day */
-  float glowF  = exp(-abs(el)/9.0) * clamp((el + 9.0)/8.0, 0.0, 1.0);  /* dawn/dusk only */
-  /* deep summer blue overhead, bright airy horizon */
+  float dayF  = smoothstep(-8.0, 10.0, el);
+  float glowF = exp(-abs(el)/9.0) * clamp((el + 9.0)/8.0, 0.0, 1.0);
   vec3 dayZen  = vec3(0.10, 0.35, 0.86);
   vec3 dayHor  = vec3(0.55, 0.76, 0.95);
-  vec3 nightZen= vec3(0.012, 0.020, 0.055);
-  vec3 nightHor= vec3(0.035, 0.055, 0.110);
-  float h = pow(clamp(frag2.y, 0.0, 1.0), 0.65);
+  vec3 nightZen= vec3(0.004, 0.007, 0.022);
+  vec3 nightHor= vec3(0.012, 0.020, 0.050);
+  float h = pow(clamp(f2.y, 0.0, 1.0), 0.65);
   vec3 sky = mix( mix(nightHor, nightZen, h), mix(dayHor, dayZen, h), dayF );
-  /* warm band hugging the horizon at sunrise/sunset */
-  vec3 warm = mix(vec3(1.00,0.45,0.25), vec3(1.00,0.62,0.30), 0.5);
+  vec3 warm = vec3(1.0, 0.535, 0.275);
   sky += warm * glowF * pow(1.0 - h, 2.5) * 0.55;
-  sky += vec3(0.55,0.35,0.45) * glowF * pow(1.0 - h, 1.2) * 0.12;
 
-  /* ---------- stars (fade in when the sun is well below horizon) ---------- */
-  float starF = smoothstep(-4.0, -12.0, el);
-  if(starF > 0.0){
-    vec2 g = uv * 160.0;
-    vec2 id = floor(g), f2 = fract(g);
-    float hh = hash21(id);
-    if(hh > 0.93){
-      vec2 sp = vec2(hash21(id+3.1), hash21(id+7.7))*0.7 + 0.15;
-      float dst = length(f2 - sp);
-      float tw = 0.75 + 0.25*sin(uWob*40.0 + hh*80.0);
-      sky += vec3(0.9,0.93,1.0) * smoothstep(0.10, 0.0, dst) * (hh-0.93)/0.07 * starF * 0.8 * tw;
-    }
-  }
-
-  /* ---------- sun ---------- */
   vec2 sunP = vec2(uSunPos.x * uRes.x/uRes.y, uSunPos.y);
   float sd = length(uv - sunP);
-  /* no visible sun disc — just a whisper of directional light in the sky */
+  /* no visible sun disc — just a whisper of directional light */
   if(el > -6.0){
     vec3 sunCol = mix(vec3(1.0,0.55,0.25), vec3(1.0,0.97,0.88), smoothstep(0.0, 25.0, el));
     sky += sunCol * 0.05 * exp(-sd*2.2);
   }
 
-  /* ---------- moon (soft, at night) ---------- */
+  /* sharp stars at night */
+  float starF = smoothstep(-4.0, -12.0, el);
+  if(starF > 0.0){
+    vec2 g = uv * 190.0;
+    vec2 id = floor(g), ff = fract(g);
+    float hh = hash21(id);
+    if(hh > 0.90){
+      vec2 sp = vec2(hash21(id+3.1), hash21(id+7.7))*0.7 + 0.15;
+      float dst = length(ff - sp);
+      float m = (hh-0.90)/0.10;
+      float tw = 0.8 + 0.2*sin(uWob*45.0 + hh*90.0);
+      sky += vec3(0.9,0.93,1.0) * m*m * smoothstep(0.09, 0.0, dst) * starF * 0.9 * tw;
+    }
+  }
+
+  /* glowing moon — the night light source */
   float moonF = smoothstep(-2.0, -10.0, el);
+  vec2 moonP = vec2(uMoonPos.x * uRes.x/uRes.y, uMoonPos.y);
   if(moonF > 0.0){
-    vec2 moonP = vec2(uMoonPos.x * uRes.x/uRes.y, uMoonPos.y);
     float md = length(uv - moonP);
-    sky += vec3(0.92,0.94,1.0) * smoothstep(0.030, 0.024, md) * 0.85 * moonF;
-    sky += vec3(0.70,0.78,1.0) * 0.10 * exp(-md*md*60.0) * moonF;
+    sky += vec3(0.95,0.96,1.00) * smoothstep(0.032, 0.026, md) * 1.1 * moonF;
+    sky += vec3(0.55,0.62,0.85) * 0.18 * exp(-md*md*40.0) * moonF;
+    sky += vec3(0.35,0.42,0.65) * 0.05 * exp(-md*2.5) * moonF;
   }
 
-  /* ---------- three drifting cloud layers, back to front ---------- */
   vec3 col = sky;
-  for(int i=0;i<3;i++){
-    float scale, off, op, ymin, ymax;
-    if(i==0){ scale=3.4; off=uOffs.x; op=0.55; ymin=0.45; ymax=1.05; }      /* far, high */
-    else if(i==1){ scale=2.3; off=uOffs.y; op=0.75; ymin=0.25; ymax=0.95; } /* middle */
-    else { scale=1.5; off=uOffs.z; op=0.92; ymin=0.02; ymax=0.85; }         /* near, low */
-    /* keep each layer in its own sky band for depth */
-    float band = smoothstep(ymin, ymin+0.18, frag2.y) * (1.0 - smoothstep(ymax-0.15, ymax, frag2.y));
-    if(band <= 0.001) continue;
-    float d = cloud(uv, scale, off, uCover, uWob) * band;
-    if(d <= 0.001) continue;
-    /* lighting: bright sunlit tops by day, moonlit slate by night, blushed at golden hour */
-    float dUp = cloud(uv + vec2(0.0, 0.035), scale, off, uCover, uWob) * band;
-    float topLight = clamp(1.0 - dUp*0.9, 0.25, 1.0);       /* thinner above = lit top */
-    vec3 dayCloud   = mix(vec3(0.58,0.66,0.80), vec3(1.02,1.01,0.99), topLight);
-    vec3 nightCloud = mix(vec3(0.030,0.042,0.075), vec3(0.10,0.13,0.20), topLight);
-    vec3 cCol = mix(nightCloud, dayCloud, dayF);
-    /* golden-hour blush, strongest on the sun side */
-    float sunSide = exp(-length(uv - sunP)*1.2);
-    cCol += vec3(1.0,0.45,0.28) * glowF * (0.35 + 0.45*sunSide) * topLight;
-    col = mix(col, cCol, d * op * (0.55 + 0.45*dayF));
+  /* light direction for cloud rims: sun by day, moon by night */
+  vec2 lightP = (el > -6.0) ? sunP : moonP;
+  vec2 toL = normalize(lightP - uv + vec2(1e-4));
+  float sunSide = exp(-length(uv - sunP)*1.2);
+  float opDay = 0.55 + 0.45*dayF;
+
+  /* ---- layer 1: high stratus veil ---- */
+  {
+    float band = smoothstep(0.55, 0.75, f2.y);
+    float d   = stratus(uv, uOff*0.30, uWob) * band;
+    if(d > 0.002){
+      float dUp = stratus(uv + vec2(0.0, 0.045), uOff*0.30, uWob) * band;
+      float dS  = stratus(uv + toL*0.035, uOff*0.30, uWob) * band;
+      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
+      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0);
+      vec3 cDay = mix(vec3(0.80,0.84,0.90), vec3(0.98,0.98,0.99), topness) + vec3(1.03,1.01,0.98)*rim*0.75;
+      vec3 cNight = vec3(0.020,0.028,0.050)*(1.0-topness*0.5) + vec3(0.18,0.21,0.30)*rim*0.6;
+      vec3 cCol = mix(cNight, cDay, dayF);
+      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*topness*d);
+      col = mix(col, cCol, d * 0.5 * opDay);
+    }
+  }
+  /* ---- layer 2: nimbostratus deck (low, heavy, occasional) ---- */
+  {
+    float band = smoothstep(0.0, 0.10, f2.y) * (1.0 - smoothstep(0.55, 0.75, f2.y));
+    float d   = nimbo(uv, uOff*0.45, uWob) * band;
+    if(d > 0.002){
+      float dUp = nimbo(uv + vec2(0.0, 0.045), uOff*0.45, uWob) * band;
+      float dS  = nimbo(uv + toL*0.035, uOff*0.45, uWob) * band;
+      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
+      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0);
+      vec3 cDay = mix(vec3(0.42,0.44,0.50), vec3(0.72,0.74,0.78), topness) + vec3(1.03,1.01,0.98)*rim*0.4;
+      vec3 cNight = vec3(0.014,0.018,0.032)*(1.0-topness*0.5) + vec3(0.10,0.12,0.18)*rim*0.6;
+      vec3 cCol = mix(cNight, cDay, dayF);
+      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*topness*d);
+      col = mix(col, cCol, d * 0.9 * opDay);
+    }
+  }
+  /* ---- layer 3: mid cumulus ---- */
+  {
+    float band = smoothstep(0.20, 0.38, f2.y) * (1.0 - smoothstep(0.80, 0.95, f2.y));
+    float d   = cumulus(uv, 2.3, uOff*0.60, uCover, uWob) * band;
+    if(d > 0.002){
+      float dUp = cumulus(uv + vec2(0.0, 0.045), 2.3, uOff*0.60, uCover, uWob) * band;
+      float dS  = cumulus(uv + toL*0.035, 2.3, uOff*0.60, uCover, uWob) * band;
+      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
+      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0);
+      vec3 cDay = mix(vec3(0.55,0.62,0.75), vec3(1.00,0.995,0.98), topness) + vec3(1.03,1.01,0.98)*rim*0.75;
+      vec3 cNight = vec3(0.016,0.022,0.040)*(1.0-topness*0.5) + vec3(0.16,0.19,0.28)*rim*0.6;
+      vec3 cCol = mix(cNight, cDay, dayF);
+      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*topness*d);
+      col = mix(col, cCol, d * 0.85 * opDay);
+    }
+  }
+  /* ---- layer 4: near cumulus ---- */
+  {
+    float band = smoothstep(0.0, 0.16, f2.y) * (1.0 - smoothstep(0.62, 0.80, f2.y));
+    float d   = cumulus(uv, 1.5, uOff, uCover + 0.01, uWob) * band;
+    if(d > 0.002){
+      float dUp = cumulus(uv + vec2(0.0, 0.045), 1.5, uOff, uCover + 0.01, uWob) * band;
+      float dS  = cumulus(uv + toL*0.035, 1.5, uOff, uCover + 0.01, uWob) * band;
+      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
+      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0);
+      vec3 cDay = mix(vec3(0.50,0.57,0.71), vec3(1.02,1.00,0.985), topness) + vec3(1.03,1.01,0.98)*rim*0.75;
+      vec3 cNight = vec3(0.018,0.024,0.044)*(1.0-topness*0.5) + vec3(0.18,0.21,0.30)*rim*0.6;
+      vec3 cCol = mix(cNight, cDay, dayF);
+      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*topness*d);
+      col = mix(col, cCol, d * 0.95 * opDay);
+    }
   }
 
-  /* gentle vignette, calm finish */
-  vec2 c2 = frag2 - 0.5;
+  vec2 c2 = f2 - 0.5;
   col *= 1.0 - dot(c2,c2)*0.35;
   col = aces(col);
   col = pow(col, vec3(1.0/2.2));
@@ -191,7 +254,7 @@ function layout(){
 window.addEventListener('resize', layout);
 layout();
 
-/* ---------- real sun from the wall clock ---------- */
+/* ---------- real sun & moon from the wall clock ---------- */
 const D2R = Math.PI/180;
 function sunNow(){
   const now = new Date();
@@ -199,42 +262,28 @@ function sunNow(){
   const N = Math.floor((now - start) / 86400000);
   const LT = now.getHours() + now.getMinutes()/60 + now.getSeconds()/3600;
   const dec = -23.44 * Math.cos(2*Math.PI*(N + 10)/365) * D2R;
-  const H = (LT - 12) * 15 * D2R;                 /* hour angle */
+  const H = (LT - 12) * 15 * D2R;
   const phi = CFG.latitude * D2R;
   const el = Math.asin(Math.sin(phi)*Math.sin(dec) + Math.cos(phi)*Math.cos(dec)*Math.cos(H)) / D2R;
-  /* screen path: rises on the left, sets on the right */
   const x = 0.5 + Math.sin(H) * 0.42;
-  const y = 0.16 + Math.max(el, -8) / 90 * 0.55;  /* horizon ~0.16 .. high sun ~0.7 */
-  /* a simple serene moon opposite the sun */
-  const mx = 0.5 - Math.sin(H) * 0.38;
-  const my = 0.55 + Math.cos(H) * 0.15;
-  return { el, x, y: Math.min(Math.max(y, 0.05), 0.72), mx, my };
+  const y = Math.min(Math.max(0.16 + Math.max(el, -8)/90 * 0.55, 0.05), 0.72);
+  /* serene moon roughly opposite the sun, high in the night sky */
+  const mx = 0.5 - Math.sin(H) * 0.30;
+  const my = 0.62 + Math.cos(H) * 0.10;
+  return { el, x, y, mx, my };
 }
 
-/* ---------- real drift speed ----------
-   near layer crosses the screen in CFG.screenCross seconds (≈ real
-   cumulus pace); farther layers at 60% / 35% (parallax).
-   Offsets are computed in JS doubles and wrapped, so there is no
-   float drift jitter and no midnight jump. */
-const SPD = [0.35, 0.60, 1.00].map(k => k / CFG.screenCross);
-function drift(){
-  const t = Date.now() / 1000;
-  const wrap = 2048;
-  uniforms.uOffs.value.set(
-    (t * SPD[0]) % wrap,
-    (t * SPD[1]) % wrap,
-    (t * SPD[2]) % wrap
-  );
-  uniforms.uWob.value = (t % 86400) * 0.002;      /* very slow shape evolution */
-}
-
+/* real drift speed: near layer crosses in CFG.screenCross seconds.
+   Offset computed in JS doubles (no float jitter, no midnight jump). */
 function animate(){
   requestAnimationFrame(animate);
   const s = sunNow();
   uniforms.uSunEl.value = s.el;
   uniforms.uSunPos.value.set(s.x, s.y);
   uniforms.uMoonPos.value.set(s.mx, s.my);
-  drift();
+  const t = Date.now() / 1000;
+  uniforms.uOff.value = (t / CFG.screenCross) % 2048;
+  uniforms.uWob.value = (t % 86400) * 0.002;
   renderer.render(scene, camera);
 }
 animate();
