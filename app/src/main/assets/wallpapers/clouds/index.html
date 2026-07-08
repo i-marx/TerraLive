@@ -242,7 +242,11 @@ function animate(){
   uniforms.uSunEl.value = s.el;
   uniforms.uSunPos.value.set(s.x, s.y);
   uniforms.uMoonPos.value.set(s.mx, s.my);
- e, camera);
+ 
+  const t = Date.now() / 1000;
+  uniforms.uOff.value = (t / CFG.screenCross) % 2048;
+  uniforms.uWob.value = (t % 86400) * 0.002;
+  renderer.render(scene, camera);
 }
 animate();
 
