@@ -1,6 +1,7 @@
 package com.terralive.wallpapers
 
 import android.app.Presentation
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.hardware.display.DisplayManager
@@ -9,12 +10,6 @@ import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import android.webkit.WebView
 
-/**
- * Live wallpaper engine. The real-time Earth is rendered by a hardware-
- * accelerated WebView (WebGL) projected onto the wallpaper surface via a
- * VirtualDisplay + Presentation. When the app is uninstalled Android
- * automatically removes this wallpaper - nothing is left behind.
- */
 class EarthWallpaperService : WallpaperService() {
 
     override fun onCreateEngine(): Engine = TerraEngine()
@@ -24,6 +19,18 @@ class EarthWallpaperService : WallpaperService() {
         private var virtualDisplay: VirtualDisplay? = null
         private var presentation: Presentation? = null
         private var webView: WebView? = null
+
+        /* hot-swap the scene when the user picks another wallpaper in the app */
+        private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == Wallpapers.KEY_SELECTED) {
+                webView?.loadUrl(Wallpapers.assetUrl(Wallpapers.selected(this@EarthWallpaperService)))
+            }
+        }
+
+        override fun onCreate(surfaceHolder: SurfaceHolder) {
+            super.onCreate(surfaceHolder)
+            Wallpapers.registerListener(this@EarthWallpaperService, prefListener)
+        }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
@@ -43,7 +50,7 @@ class EarthWallpaperService : WallpaperService() {
                 allowFileAccess = true
                 mediaPlaybackRequiresUserGesture = false
             }
-            wv.loadUrl("file:///android_asset/earth.html")
+            wv.loadUrl(Wallpapers.assetUrl(Wallpapers.selected(this@EarthWallpaperService)))
             pres.setContentView(wv)
             pres.show()
             presentation = pres
@@ -51,7 +58,6 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            // save battery: freeze rendering whenever the wallpaper is hidden
             if (visible) { webView?.onResume(); webView?.resumeTimers() }
             else { webView?.onPause(); webView?.pauseTimers() }
         }
@@ -62,6 +68,7 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onDestroy() {
+            Wallpapers.unregisterListener(this@EarthWallpaperService, prefListener)
             release()
             super.onDestroy()
         }

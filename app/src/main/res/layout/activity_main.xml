@@ -1,68 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/terra_bg"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="32dp">
-
-    <Space android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1.2" />
+    android:padding="28dp">
 
     <ImageView
-        android:layout_width="112dp"
-        android:layout_height="112dp"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginTop="24dp"
         android:src="@drawable/ic_launcher_foreground"
         android:contentDescription="@string/app_name" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="10dp"
         android:text="@string/brand_word"
         android:textColor="@color/terra_white"
-        android:textSize="34sp"
+        android:textSize="28sp"
         android:textStyle="bold"
         android:letterSpacing="0.32" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="2dp"
         android:text="@string/brand_sub"
         android:textColor="@color/terra_cyan"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:letterSpacing="0.42" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="28dp"
-        android:gravity="center"
-        android:text="@string/tagline"
-        android:textColor="@color/terra_grey"
-        android:textSize="15sp" />
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="24dp"
+        android:scrollbars="none">
 
-    <Space android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
+        <LinearLayout
+            android:id="@+id/wallpaperList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSet"
         android:layout_width="match_parent"
         android:layout_height="56dp"
+        android:layout_marginTop="16dp"
         android:text="@string/set_wallpaper"
         android:textSize="16sp"
         android:textColor="@color/terra_bg"
         android:backgroundTint="@color/terra_blue"
-        app:cornerRadius="28dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto" />
+        app:cornerRadius="28dp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp"
         android:gravity="center"
         android:text="@string/footnote"
         android:textColor="@color/terra_grey_dim"
-        android:textSize="12sp" />
+        android:textSize="11sp" />
 </LinearLayout>
