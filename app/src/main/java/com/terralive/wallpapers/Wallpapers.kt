@@ -24,7 +24,7 @@ object Wallpapers {
         WallpaperInfo(
             "clouds",
             "Drifting Clouds",
-            "Cumulus, stratus and nimbostratus at true drift speed — real 24-hour sky, stars and moon at night"
+            "Fluffy cumulus at true drift speed — real 24-hour sky, stars and moon at night"
         )
         // coming soon: more places on Earth — oceans, mountains, rain...
     )

@@ -92,24 +92,11 @@ float cumulus(vec2 uv, float scale, float off, float cover, float wob){
   d += 0.09 * fbm3(p*3.3 + w*2.0);
   d += 0.04 * fbm3(p*7.9);
   float t = smoothstep(cover - 0.02, cover + 0.09, d);
-  return clamp(t*mask*1.8, 0.0, 1.0) + t*0.08*(1.0 - mask);
-}
-/* thin high veil — subtle streaks, never a blanket */
-float stratus(vec2 uv, float off, float wob){
-  vec2 p = (uv + vec2(off*0.7, 0.0)) * 1.1;
-  float d = fbm4(vec2(p.x*0.55, p.y*3.6)) + 0.25*fbm3(vec2(p.x*2.0, p.y*7.5));
-  return smoothstep(0.60, 0.88, d) * 0.55;
+  return clamp(t*mask*2.1, 0.0, 1.0) + t*0.07*(1.0 - mask);
 }
 /* cauliflower interior lighting: lumpy self-shading across a mass */
 float lumps(vec2 uv, float scale, float off){
   return fbm3(vec2((uv.x + off)*scale*2.6 + 5.0, uv.y*scale*2.6 + 5.0));
-}
-/* occasional heavy grey deck */
-float nimbo(vec2 uv, float off, float wob){
-  vec2 p = (uv + vec2(off*0.85, 0.0)) * 0.9;
-  float deck = smoothstep(0.63, 0.74, fbm3(vec2(p.x*0.35 + 50.0 + wob*0.3, p.y*0.8 + 50.0)));
-  float tex = 0.55 + 0.45*fbm3(vec2(p.x*2.0, p.y*2.6));
-  return deck * tex;
 }
 
 void main(){
@@ -168,72 +155,38 @@ void main(){
   float sunSide = exp(-length(uv - sunP)*1.2);
   float opDay = 0.55 + 0.45*dayF;
 
-  /* ---- layer 1: high stratus veil ---- */
+  /* ---- far cumulus (high band) ---- */
   {
-    float band = smoothstep(0.55, 0.75, f2.y);
-    float d   = stratus(uv, uOff*0.30, uWob) * band;
+    float band = smoothstep(0.30, 0.48, f2.y) * (1.0 - smoothstep(0.88, 1.0, f2.y));
+    float d   = cumulus(uv, 2.2, uOff*0.55, uCover - 0.03, uWob) * band;
     if(d > 0.002){
-      float dUp = stratus(uv + vec2(0.0, 0.045), uOff*0.30, uWob) * band;
-      float dS  = stratus(uv + toL*0.035, uOff*0.30, uWob) * band;
+      float dUp = cumulus(uv + vec2(0.0, 0.045), 2.2, uOff*0.55, uCover - 0.03, uWob) * band;
+      float dS  = cumulus(uv + toL*0.035, 2.2, uOff*0.55, uCover - 0.03, uWob) * band;
       float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
       float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.45;
-      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 1.1, uOff*0.30)-0.45)*1.15, 0.0, 1.0);
-      vec3 cDay = mix(vec3(0.80,0.84,0.90), vec3(0.98,0.98,0.99), lit) + vec3(1.03,1.01,0.98)*rim;
-      vec3 cNight = vec3(0.020,0.028,0.050)*(0.8+0.4*lit) + vec3(0.18,0.21,0.30)*rim*0.8;
-      vec3 cCol = mix(cNight, cDay, dayF);
-      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*lit*d);
-      col = mix(col, cCol, d * 0.30 * opDay);
-    }
-  }
-  /* ---- layer 2: nimbostratus deck (low, heavy, occasional) ---- */
-  {
-    float band = smoothstep(0.0, 0.10, f2.y) * (1.0 - smoothstep(0.55, 0.75, f2.y));
-    float d   = nimbo(uv, uOff*0.45, uWob) * band;
-    if(d > 0.002){
-      float dUp = nimbo(uv + vec2(0.0, 0.045), uOff*0.45, uWob) * band;
-      float dS  = nimbo(uv + toL*0.035, uOff*0.45, uWob) * band;
-      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
-      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.45;
-      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 0.9, uOff*0.45)-0.45)*1.15, 0.0, 1.0);
-      vec3 cDay = mix(vec3(0.42,0.44,0.50), vec3(0.72,0.74,0.78), lit) + vec3(1.03,1.01,0.98)*rim;
-      vec3 cNight = vec3(0.014,0.018,0.032)*(0.8+0.4*lit) + vec3(0.10,0.12,0.18)*rim*0.8;
-      vec3 cCol = mix(cNight, cDay, dayF);
-      cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*lit*d);
-      col = mix(col, cCol, d * 0.9 * opDay);
-    }
-  }
-  /* ---- layer 3: mid cumulus ---- */
-  {
-    float band = smoothstep(0.20, 0.38, f2.y) * (1.0 - smoothstep(0.80, 0.95, f2.y));
-    float d   = cumulus(uv, 2.3, uOff*0.60, uCover, uWob) * band;
-    if(d > 0.002){
-      float dUp = cumulus(uv + vec2(0.0, 0.045), 2.3, uOff*0.60, uCover, uWob) * band;
-      float dS  = cumulus(uv + toL*0.035, 2.3, uOff*0.60, uCover, uWob) * band;
-      float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
-      float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.45;
-      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 2.3, uOff*0.60)-0.45)*1.15, 0.0, 1.0);
+      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 2.2, uOff*0.55)-0.45)*1.15, 0.0, 1.0);
       vec3 cDay = mix(vec3(0.55,0.62,0.75), vec3(1.00,0.995,0.98), lit) + vec3(1.03,1.01,0.98)*rim;
       vec3 cNight = vec3(0.016,0.022,0.040)*(0.8+0.4*lit) + vec3(0.16,0.19,0.28)*rim*0.8;
       vec3 cCol = mix(cNight, cDay, dayF);
       cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*lit*d);
-      col = mix(col, cCol, d * 0.85 * opDay);
+      col = mix(col, cCol, d * 0.90 * opDay);
     }
   }
-  /* ---- layer 4: near cumulus ---- */
+  /* ---- near cumulus (low band, faster) ---- */
   {
-    float band = smoothstep(0.0, 0.16, f2.y) * (1.0 - smoothstep(0.62, 0.80, f2.y));
-    float d   = cumulus(uv, 1.5, uOff, uCover + 0.01, uWob) * band;
+    float band = smoothstep(0.0, 0.12, f2.y) * (1.0 - smoothstep(0.60, 0.80, f2.y));
+    float d   = cumulus(uv, 1.4, uOff, uCover - 0.02, uWob) * band;
     if(d > 0.002){
-      float dUp = cumulus(uv + vec2(0.0, 0.045), 1.5, uOff, uCover + 0.01, uWob) * band;
-      float dS  = cumulus(uv + toL*0.035, 1.5, uOff, uCover + 0.01, uWob) * band;
+      float dUp = cumulus(uv + vec2(0.0, 0.045), 1.4, uOff, uCover - 0.02, uWob) * band;
+      float dS  = cumulus(uv + toL*0.035, 1.4, uOff, uCover - 0.02, uWob) * band;
       float topness = clamp(1.0 - dUp*1.15, 0.0, 1.0);
       float rim = clamp((d - dS)*2.6, 0.0, 1.0) * clamp(d*(1.0-d)*4.0, 0.0, 1.0) * 0.45;
-      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 1.5, uOff)-0.45)*1.15, 0.0, 1.0);
+      float lit = clamp(0.25 + 0.60*topness + (lumps(uv, 1.4, uOff)-0.45)*1.15, 0.0, 1.0);
       vec3 cDay = mix(vec3(0.50,0.57,0.71), vec3(1.02,1.00,0.985), lit) + vec3(1.03,1.01,0.98)*rim;
       vec3 cNight = vec3(0.018,0.024,0.044)*(0.8+0.4*lit) + vec3(0.18,0.21,0.30)*rim*0.8;
       vec3 cCol = mix(cNight, cDay, dayF);
       cCol += warm * glowF * (0.30 + 0.50*sunSide) * (rim + 0.3*lit*d);
-      col = mix(col, cCol, d * 0.95 * opDay);
+      col = mix(col, cCol, d * 0.97 * opDay);
     }
   }
 
