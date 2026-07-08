@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.Terra" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/terra_blue</item>
+        <item name="android:windowBackground">@color/terra_bg</item>
+        <item name="android:statusBarColor">@color/terra_bg</item>
+        <item name="android:navigationBarColor">@color/terra_bg</item>
+    </style>
+
+    <style name="Theme.Terra.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/terra_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Terra</item>
+    </style>
+</resources>

@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Terra Live Wallpapers</string>
+    <string name="brand_word">TERRA</string>
+    <string name="brand_sub">LIVE WALLPAPERS</string>
+    <string name="tagline">Your planet. In real time.</string>
+    <string name="set_wallpaper">Set as Live Wallpaper</string>
+    <string name="footnote">Real sunlight &#183; live satellite clouds &#183; true night sky &#183; real Moon</string>
+    <string name="wallpaper_name">Terra &#8212; Real-Time Earth</string>
+    <string name="wallpaper_description">Ultra-realistic Earth driven by your clock: real rotation, live clouds, real Moon and the true night sky.</string>
+</resources>

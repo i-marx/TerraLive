@@ -1,0 +1,9 @@
+<resources>
+    <color name="terra_bg">#060911</color>
+    <color name="terra_blue">#3B7BFF</color>
+    <color name="terra_cyan">#7FD1FF</color>
+    <color name="terra_white">#F2F5F9</color>
+    <color name="terra_grey">#8A93A6</color>
+    <color name="terra_grey_dim">#4A5163</color>
+    <color name="terra_amber">#FFB35C</color>
+</resources>
