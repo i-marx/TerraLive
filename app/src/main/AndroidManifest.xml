@@ -3,6 +3,8 @@
 
     <!-- Internet: NASA imagery CDN + live EUMETSAT cloud cover -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Coarse location: used only to centre Earth over the viewer's place; never stored or sent -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.software.live_wallpaper" android:required="true" />
 
     <application

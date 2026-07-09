@@ -44,9 +44,45 @@ const CFG = {
   moonRadius   : 0.2727, // Earth radii — TRUE scale: real size
   cloudRefresh : 3*3600*1000,  // live satellite clouds update every 3 h
   shadowFrac   : 0.25,   // fraction of the visible disk in shadow (on the left edge)
+  /* location-lock: camera stays over the user's coords so Earth appears still
+     and the Sun sweeps across for a real day/night cycle. lat/lon injected by
+     the app as ?lock=1&lat=..&lon=.. ; lonOffset calibrates texture longitude. */
+  lockToLocation : false,
+  userLat        : 0,
+  userLon        : 0,
+  lonOffset      : 0,
   starSphereR  : 3000,
   starCatalog  : 'https://cdn.jsdelivr.net/gh/ofrohn/d3-celestial@master/data/stars.6.json'
 };
+
+/* --- read location-lock settings passed by the app via the asset URL --- */
+(function(){
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.get('lock') === '1' || q.has('lat')){
+      const la = parseFloat(q.get('lat')), lo = parseFloat(q.get('lon'));
+      if(isFinite(la) && isFinite(lo)){
+        CFG.lockToLocation = true;
+        CFG.userLat = la;
+        CFG.userLon = lo;
+      }
+    }
+    if(q.has('lonOffset')) CFG.lonOffset = parseFloat(q.get('lonOffset')) || 0;
+  }catch(e){}
+})();
+
+/* surface point (lat,lon) -> scene-frame direction, matching the globe texture
+   mapping and the current Earth spin (gm = GMST in radians). */
+function locationDir(lat, lon, gm){
+  const D = Math.PI/180;
+  const phi = (90 - lat) * D, theta = (lon + CFG.lonOffset + 180) * D;
+  const lx = -Math.sin(phi)*Math.cos(theta);
+  const ly =  Math.cos(phi);
+  const lz =  Math.sin(phi)*Math.sin(theta);
+  /* rotate about Y by gm (same as earth.rotation.y) */
+  const c = Math.cos(gm), sN = Math.sin(gm);
+  return [ lx*c + lz*sN, ly, -lx*sN + lz*c ];
+}
 
 /* ===================== ASTRONOMY (pure math) =====================
    All angles in degrees unless noted. Frame used by the scene:
@@ -315,9 +351,7 @@ const earthMat = new THREE.ShaderMaterial({
       vec3 day = pow(texture2D(dayMap, vUv).rgb, vec3(2.2));
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
-      /* broad soft sheen on oceans (no hotspot) */
-      float wm = mix(0.22, texture2D(waterMap, vUv).r, uHasWater);
-      col += sunCol * pow(max(dot(reflect(-sunDir, n), vd), 0.0), 8.0) * wm * dmix * 0.10;
+      /* no ocean sun reflection — testers found the specular blob distracting */
       /* cloud shadows: sample the cloud layer displaced along the sun direction */
       if(uHasClouds > 0.5){
         vec3 east  = normalize(cross(vec3(0.0,1.0,0.0), n) + vec3(1e-5));
@@ -673,14 +707,23 @@ function update(){
     sp.material.opacity = Math.min(1, Math.pow(10, -0.2*(p.mag - 1.5)));
   }
 
-  /* Camera: in the ecliptic plane, offset from the Sun line so that
-     shadowFrac of the disk is dark (terminator on the left),
-     ecliptic north up => 23.4 deg axial tilt visible. */
-  const alpha = Math.acos(1 - 2*CFG.shadowFrac) * R2D;
-  const cd = eclToArr(s.lam - alpha, 0, n);
-  camera.position.set(cd[0]*camDist, cd[1]*camDist, cd[2]*camDist);
-  setFromArr(camera.up, eclNorthArr(n));
-  camera.lookAt(0,0,0);
+  if(CFG.lockToLocation){
+    /* Camera locked over the user's location: it co-rotates with Earth's spin
+       (gm), so the globe appears still and the Sun sweeps across -> real-time
+       day and night at the viewer's own place. Ecliptic north keeps axial tilt. */
+    const ld = locationDir(CFG.userLat, CFG.userLon, gm);
+    camera.position.set(ld[0]*camDist, ld[1]*camDist, ld[2]*camDist);
+    setFromArr(camera.up, eclNorthArr(n));
+    camera.lookAt(0,0,0);
+  } else {
+    /* Default: fixed in the ecliptic plane, offset from the Sun so shadowFrac of
+       the disk is dark (terminator on the left), ecliptic north up. */
+    const alpha = Math.acos(1 - 2*CFG.shadowFrac) * R2D;
+    const cd = eclToArr(s.lam - alpha, 0, n);
+    camera.position.set(cd[0]*camDist, cd[1]*camDist, cd[2]*camDist);
+    setFromArr(camera.up, eclNorthArr(n));
+    camera.lookAt(0,0,0);
+  }
 }
 
 function animate(){

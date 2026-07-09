@@ -22,8 +22,8 @@ class EarthWallpaperService : WallpaperService() {
 
         /* hot-swap the scene when the user picks another wallpaper in the app */
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == Wallpapers.KEY_SELECTED) {
-                webView?.loadUrl(Wallpapers.assetUrl(Wallpapers.selected(this@EarthWallpaperService)))
+            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON) {
+                webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             }
         }
 
@@ -50,7 +50,7 @@ class EarthWallpaperService : WallpaperService() {
                 allowFileAccess = true
                 mediaPlaybackRequiresUserGesture = false
             }
-            wv.loadUrl(Wallpapers.assetUrl(Wallpapers.selected(this@EarthWallpaperService)))
+            wv.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             pres.setContentView(wv)
             pres.show()
             presentation = pres

@@ -13,6 +13,9 @@ data class WallpaperInfo(val id: String, val title: String, val subtitle: String
 object Wallpapers {
     private const val PREFS = "terra_prefs"
     const val KEY_SELECTED = "selected_wallpaper"
+    const val KEY_LOCK = "lock_location"     // Boolean: lock Earth over the user's place
+    const val KEY_LAT = "user_lat"           // Float
+    const val KEY_LON = "user_lon"           // Float
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
@@ -31,6 +34,26 @@ object Wallpapers {
     )
 
     fun assetUrl(id: String) = "file:///android_asset/wallpapers/$id/index.html"
+
+    /* Asset URL with location-lock query params appended when enabled (earth only). */
+    fun urlFor(ctx: Context, id: String): String {
+        val base = assetUrl(id)
+        if (id != "earth") return base
+        val p = prefs(ctx)
+        if (!p.getBoolean(KEY_LOCK, false)) return base
+        val lat = p.getFloat(KEY_LAT, Float.NaN)
+        val lon = p.getFloat(KEY_LON, Float.NaN)
+        if (lat.isNaN() || lon.isNaN()) return base
+        return "$base?lock=1&lat=$lat&lon=$lon"
+    }
+
+    fun lockEnabled(ctx: Context) = prefs(ctx).getBoolean(KEY_LOCK, false)
+
+    fun setLock(ctx: Context, on: Boolean, lat: Double? = null, lon: Double? = null) {
+        val e = prefs(ctx).edit().putBoolean(KEY_LOCK, on)
+        if (lat != null && lon != null) { e.putFloat(KEY_LAT, lat.toFloat()); e.putFloat(KEY_LON, lon.toFloat()) }
+        e.apply()
+    }
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
