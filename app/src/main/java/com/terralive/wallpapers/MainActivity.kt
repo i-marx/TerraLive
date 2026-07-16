@@ -142,7 +142,7 @@ class MainActivity : AppCompatActivity() {
         val modes = listOf(
             Triple("full",    "Full view",            "Earth from deep space, terminator on the left"),
             Triple("locked",  "Locked to my place",   "Your location centred, globe holds still, Sun sweeps for real day/night"),
-            Triple("closeup", "Close-up over my place","Low-orbit oblique (~600 km) looking to the horizon")
+            Triple("closeup", "Close-up over my place","Low-orbit oblique view looking toward the horizon")
         )
         for ((id, title, sub) in modes) {
             val on = id == currentMode

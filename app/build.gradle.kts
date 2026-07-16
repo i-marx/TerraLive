@@ -11,7 +11,7 @@ android {
         applicationId = "com.terralive.wallpapers"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
+        versionCode = 8
         versionName = "1.0"
     }
     signingConfigs {
@@ -29,6 +29,13 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (System.getenv("TERRA_KEYSTORE") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        debug {
+            // sign the debug build with the stable Terra key too, so sideloaded
+            // debug APKs upgrade cleanly across CI builds (no signature clashes)
             if (System.getenv("TERRA_KEYSTORE") != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
