@@ -52,11 +52,11 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 600,
-  cuLookDown     : 60,
-  cuAzimuth      : 235,
-  cuRoll         : 26,
-  cuFov          : 63,
+  cuAltitudeKm   : 900,
+  cuLookDown     : 54,       // deg below local horizontal
+  cuAzimuth      : 240,
+  cuRoll         : 14,       // rolls the horizon toward the upper-left
+  cuFov          : 58,
   starSphereR  : 3000,
   starCatalog  : 'https://cdn.jsdelivr.net/gh/ofrohn/d3-celestial@master/data/stars.6.json'
 };
@@ -410,12 +410,24 @@ const cloudMat = new THREE.ShaderMaterial({
     varying vec3 vN; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
-      float l = max(dot(normalize(vN), sunDir), 0.0);
+      vec3 n = normalize(vN);
+      float l  = max(dot(n, sunDir), 0.0);
+      float dm = smoothstep(-0.12, 0.15, dot(n, sunDir));   // day fraction
       vec4 t = texture2D(map, vUv);
-      float a = pow(t.r * t.a, 0.85);   // crisper cloud edges
-      vec3 c = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
+      float a = pow(t.r * t.a, 0.85);
+      /* fade clouds out toward the poles to kill the equirectangular
+         starburst where the texture pinches at |lat| -> 90 */
+      float poleFade = smoothstep(0.985, 0.93, abs(n.y));
+      a *= poleFade;
+      /* day: bright sunlit tops.  night: dark slate cloud that still blocks
+         the city lights beneath, so weather is visible on the dark side too. */
+      vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
+      vec3 nightC = vec3(0.020, 0.028, 0.045);
+      vec3 c = mix(nightC, dayC, dm);
       c = pow(aces(c), vec3(1.0/2.2));
-      gl_FragColor = vec4(c, a * 0.94);
+      /* keep night clouds fairly opaque so they read as shapes over the lights */
+      float alpha = a * mix(0.80, 0.94, dm);
+      gl_FragColor = vec4(c, alpha);
     }`
 });
 const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.006, 256, 256), cloudMat);
@@ -662,14 +674,17 @@ function layout(){
   camera.aspect = w/h;
   camera.clearViewOffset();
   if(CFG.mode === 'closeup'){
-    /* wide field for the low-orbit oblique; globe centred (no view offset) */
+    /* wide field for the low-orbit oblique; globe centred (no view offset).
+       tiny near plane so the surface just below the camera isn't clipped. */
     camera.fov = CFG.cuFov;
+    camera.near = 0.002;
     camera.updateProjectionMatrix();
     return;
   }
   if(CFG.mode === 'locked'){
     /* full disk, centred on screen */
     camera.fov = 40;
+    camera.near = 0.1;
     const vHalf = camera.fov * 0.5 * D2R;
     const r = 0.82;   // disk fills 82% of the smaller dimension
     const th = camera.aspect >= 1
@@ -680,6 +695,7 @@ function layout(){
     return;
   }
   camera.fov = 40;
+  camera.near = 0.1;
   const F = camera.aspect >= 1 ? CFG.frame.land : CFG.frame.port;
   const vHalf = camera.fov * 0.5 * D2R;
   const th = camera.aspect >= 1
