@@ -52,8 +52,8 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 2600,
-  cuLookDown     : 48,       // deg below local horizontal
+  cuAltitudeKm   : 2800,
+  cuLookDown     : 38,       // shallower -> surface seen at a grazing (smoother) angle
   cuAzimuth      : 240,
   cuRoll         : 14,       // rolls the horizon toward the upper-left
   cuFov          : 58,
@@ -694,6 +694,9 @@ function layout(){
     camera.fov = CFG.cuFov;
     camera.near = 0.02;
     camera.updateProjectionMatrix();
+    var veil = document.getElementById('veil');
+    if(veil) veil.style.background =
+      'linear-gradient(to top, rgba(4,7,14,0.72) 0%, rgba(4,7,14,0.30) 22%, rgba(0,0,0,0) 46%)';
     return;
   }
   if(CFG.mode === 'locked'){
