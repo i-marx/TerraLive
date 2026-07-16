@@ -52,7 +52,7 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 900,
+  cuAltitudeKm   : 1200,
   cuLookDown     : 54,       // deg below local horizontal
   cuAzimuth      : 240,
   cuRoll         : 14,       // rolls the horizon toward the upper-left
@@ -334,6 +334,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform float uHasTopo; uniform float uCloudShift; uniform vec3 sunDir;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
+    float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
     void main(){
       vec3 nGeo = normalize(vN);
       vec3 n = nGeo;
@@ -373,9 +374,23 @@ const earthMat = new THREE.ShaderMaterial({
       /* warm band along the terminator */
       float tw = smoothstep(-0.05, 0.03, ca) * (1.0 - smoothstep(0.03, 0.30, ca));
       col *= mix(vec3(1.0), vec3(1.10, 0.93, 0.82), tw * 0.3);
-      /* city lights on the night side */
+      /* city lights on the night side, with soft bloom + fine sparkle so the
+         low-res texture reads as dense glowing points rather than blur */
       vec3 night = pow(texture2D(nightMap, vUv).rgb, vec3(2.2));
-      col += night * vec3(1.0, 0.76, 0.45) * (1.0 - dmix) * 2.0 * uHasNight;
+      float e = 0.0016;
+      vec3 glow = pow(texture2D(nightMap, vUv+vec2(e,0.0)).rgb, vec3(2.2))
+                + pow(texture2D(nightMap, vUv+vec2(-e,0.0)).rgb, vec3(2.2))
+                + pow(texture2D(nightMap, vUv+vec2(0.0,e)).rgb, vec3(2.2))
+                + pow(texture2D(nightMap, vUv+vec2(0.0,-e)).rgb, vec3(2.2))
+                + pow(texture2D(nightMap, vUv+vec2(e,e)).rgb, vec3(2.2))
+                + pow(texture2D(nightMap, vUv+vec2(-e,-e)).rgb, vec3(2.2));
+      glow *= (1.0/6.0);
+      /* granulate: high-frequency stipple keyed to the lit areas */
+      float nl = max(night.r, max(night.g, night.b));
+      float spk = hash21(floor(vUv * 5000.0));
+      float stipple = mix(0.65, 1.5, smoothstep(0.45, 0.75, spk));
+      vec3 lights = (night * stipple + glow * 0.75);
+      col += lights * vec3(1.0, 0.78, 0.5) * (1.0 - dmix) * 2.1 * uHasNight;
       /* atmospheric scattering: soft haze thickening toward the limb */
       float mu = max(dot(nGeo, vd), 0.0);
       float haze = pow(1.0 - mu, 2.0);
