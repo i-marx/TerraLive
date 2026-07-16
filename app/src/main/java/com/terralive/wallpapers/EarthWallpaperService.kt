@@ -22,7 +22,7 @@ class EarthWallpaperService : WallpaperService() {
 
         /* hot-swap the scene when the user picks another wallpaper in the app */
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON) {
+            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON) {
                 webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             }
         }
