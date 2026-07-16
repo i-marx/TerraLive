@@ -52,8 +52,8 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 1200,
-  cuLookDown     : 54,       // deg below local horizontal
+  cuAltitudeKm   : 2600,
+  cuLookDown     : 48,       // deg below local horizontal
   cuAzimuth      : 240,
   cuRoll         : 14,       // rolls the horizon toward the upper-left
   cuFov          : 58,
@@ -256,7 +256,13 @@ function loadTex(urls){
   return new Promise(res=>{
     const tryOne = i=>{
       if(i >= urls.length) return res(null);
-      texLoader.load(urls[i], t=>{ t.anisotropy = renderer.capabilities.getMaxAnisotropy(); res(t); },
+      texLoader.load(urls[i], t=>{
+        t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        t.minFilter = THREE.LinearMipmapLinearFilter;   // trilinear -> less crawling
+        t.magFilter = THREE.LinearFilter;                // smooth, not blocky, up close
+        t.generateMipmaps = true;
+        res(t);
+      },
         undefined, ()=>tryOne(i+1));
     };
     tryOne(0);
