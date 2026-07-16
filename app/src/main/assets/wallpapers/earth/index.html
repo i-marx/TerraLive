@@ -234,7 +234,7 @@ function magToSize(m){ return Math.max(1.0, 7.0*Math.pow(10, -0.115*m)); }
 /* ===================== RENDERER / SCENE ===================== */
 let renderer;
 try{
-  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'low-power' });
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'low-power', logarithmicDepthBuffer:true });
 }catch(e){ document.getElementById('err').style.display='flex'; throw e; }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -686,7 +686,7 @@ function layout(){
     /* wide field for the low-orbit oblique; globe centred (no view offset).
        tiny near plane so the surface just below the camera isn't clipped. */
     camera.fov = CFG.cuFov;
-    camera.near = 0.002;
+    camera.near = 0.02;
     camera.updateProjectionMatrix();
     return;
   }
