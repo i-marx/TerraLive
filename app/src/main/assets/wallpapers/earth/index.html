@@ -235,9 +235,9 @@ function magToSize(m){ return Math.max(1.0, 7.0*Math.pow(10, -0.115*m)); }
 /* ===================== RENDERER / SCENE ===================== */
 let renderer;
 try{
-  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'low-power', logarithmicDepthBuffer:true });
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance', logarithmicDepthBuffer:true });
 }catch(e){ document.getElementById('err').style.display='flex'; throw e; }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 3));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.appendChild(renderer.domElement);
@@ -320,6 +320,7 @@ const earthUniforms = {
   uHasNight:{ value: 0.0 },
   uHasTopo :{ value: 0.0 },
   uNightBlur:{ value: 0.6 },
+  uDetail  :{ value: 0.0 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
   sunDir  : { value: new THREE.Vector3(1,0,0) }
@@ -340,7 +341,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform sampler2D cloudMap; uniform sampler2D topoMap;
     uniform float uHasWater; uniform float uHasNight; uniform float uHasClouds;
     uniform float uHasTopo; uniform float uCloudShift; uniform vec3 sunDir;
-    uniform float uNightBlur;
+    uniform float uNightBlur; uniform float uDetail;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -362,9 +363,18 @@ const earthMat = new THREE.ShaderMaterial({
       float daylight = max(ca, 0.0);
       float dmix = smoothstep(-0.1, 0.15, dot(nGeo, sunDir));
       /* work in linear light like a real camera pipeline */
-      vec3 day = pow(texture2D(dayMap, vUv).rgb, vec3(2.2));
+      vec3 day = pow(texture2D(dayMap, vUv, -0.45).rgb, vec3(2.2));
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
+      /* close-up only: fine terrain grain locked to the surface, breaks up
+         texture softness at low altitude without any temporal shimmer */
+      if(uDetail > 0.5){
+        vec2 gp = vUv * 3600.0;
+        vec2 gi = floor(gp), gf = fract(gp); gf = gf*gf*(3.0-2.0*gf);
+        float g = mix(mix(hash21(gi), hash21(gi+vec2(1,0)), gf.x),
+                      mix(hash21(gi+vec2(0,1)), hash21(gi+vec2(1,1)), gf.x), gf.y);
+        col *= 1.0 + (g - 0.5) * 0.11 * dmix;
+      }
       /* no ocean sun reflection — testers found the specular blob distracting */
       /* cloud shadows: sample the cloud layer displaced along the sun direction */
       if(uHasClouds > 0.5){
@@ -406,7 +416,7 @@ const earthMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(col, 1.0);
     }`
 });
-const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 256, 256), earthMat);
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 384, 384), earthMat);
 scene.add(earth);
 
 /* ---------- clouds ---------- */
@@ -444,7 +454,7 @@ const cloudMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, alpha);
     }`
 });
-const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.006, 256, 256), cloudMat);
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.006, 384, 384), cloudMat);
 clouds.visible = false;
 scene.add(clouds);
 
@@ -746,6 +756,7 @@ function update(){
   earthUniforms.sunDir.value.set(sd[0], sd[1], sd[2]);
   /* sharp lights when far, smooth blurred glow when zoomed in close */
   earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 3.0 : 0.6;
+  earthUniforms.uDetail.value    = (CFG.mode === 'closeup') ? 1.0 : 0.0;
   sunLight.position.set(sd[0]*100, sd[1]*100, sd[2]*100);
 
   /* Moon: true direction, tidally locked, correct phase from the same sunlight */
