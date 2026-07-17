@@ -52,10 +52,10 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 2800,
-  cuLookDown     : 38,       // shallower -> surface seen at a grazing (smoother) angle
-  cuAzimuth      : 240,
-  cuRoll         : 14,       // rolls the horizon toward the upper-left
+  cuAltitudeKm   : 2500,
+  cuLookDown     : 73,       // steep enough that the location sits in the lower frame
+  cuAzimuth      : 300,
+  cuRoll         : -22,      // space to the upper-left, location to the lower-right
   cuFov          : 58,
   starSphereR  : 3000,
   starCatalog  : 'https://cdn.jsdelivr.net/gh/ofrohn/d3-celestial@master/data/stars.6.json'
@@ -318,6 +318,7 @@ const earthUniforms = {
   uHasWater:{ value: 0.0 },
   uHasNight:{ value: 0.0 },
   uHasTopo :{ value: 0.0 },
+  uNightBlur:{ value: 0.6 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
   sunDir  : { value: new THREE.Vector3(1,0,0) }
@@ -338,6 +339,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform sampler2D cloudMap; uniform sampler2D topoMap;
     uniform float uHasWater; uniform float uHasNight; uniform float uHasClouds;
     uniform float uHasTopo; uniform float uCloudShift; uniform vec3 sunDir;
+    uniform float uNightBlur;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -380,21 +382,13 @@ const earthMat = new THREE.ShaderMaterial({
       /* warm band along the terminator */
       float tw = smoothstep(-0.05, 0.03, ca) * (1.0 - smoothstep(0.03, 0.30, ca));
       col *= mix(vec3(1.0), vec3(1.10, 0.93, 0.82), tw * 0.3);
-      /* city lights: a wide soft blur turns the low-res, blocky night texture
-         into smooth glowing pools of light (like real orbital photography),
-         hiding JPEG blocks and pixel crawl. 13-tap disk blur, night side only. */
-      #define NT(o) pow(texture2D(nightMap, vUv + (o)).rgb, vec3(2.2))
-      vec3 sharp = NT(vec2(0.0));
-      float r1 = 0.0026, r2 = 0.0060;
-      vec3 blur = sharp * 3.0;
-      blur += NT(vec2( r1, 0.0)) + NT(vec2(-r1, 0.0)) + NT(vec2(0.0, r1)) + NT(vec2(0.0,-r1));
-      blur += NT(vec2( r1, r1)) + NT(vec2(-r1, r1)) + NT(vec2( r1,-r1)) + NT(vec2(-r1,-r1));
-      blur += NT(vec2( r2, 0.0)) + NT(vec2(-r2, 0.0)) + NT(vec2(0.0, r2)) + NT(vec2(0.0,-r2));
-      blur *= (1.0/15.0);
-      /* mostly blur (kills the blocks) with a hint of the sharp peaks for punch */
-      vec3 lights = mix(blur, max(blur, sharp), 0.35) + blur * 0.6;
-      col += lights * vec3(1.0, 0.78, 0.5) * (1.0 - dmix) * 2.2 * uHasNight;
-      #undef NT
+      /* city lights: sampled from a blurred mip level (LOD bias) so they read as
+         smooth glowing pools instead of blocky pixels — hardware trilinear blur,
+         no multi-tap duplicates or crawl. Bias is raised for the close-up. */
+      vec3 nSharp = pow(texture2D(nightMap, vUv).rgb, vec3(2.2));
+      vec3 nSoft  = pow(texture2D(nightMap, vUv, uNightBlur).rgb, vec3(2.2));
+      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) + nSharp * 0.22;
+      col += lights * vec3(1.0, 0.80, 0.52) * (1.0 - dmix) * 2.1 * uHasNight;
       /* atmospheric scattering: soft haze thickening toward the limb */
       float mu = max(dot(nGeo, vd), 0.0);
       float haze = pow(1.0 - mu, 2.0);
@@ -749,6 +743,8 @@ function update(){
   const s = sunEcl(n);
   const sd = eclToArr(s.lam, 0, n);
   earthUniforms.sunDir.value.set(sd[0], sd[1], sd[2]);
+  /* sharp lights when far, smooth blurred glow when zoomed in close */
+  earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 3.0 : 0.6;
   sunLight.position.set(sd[0]*100, sd[1]*100, sd[2]*100);
 
   /* Moon: true direction, tidally locked, correct phase from the same sunlight */
