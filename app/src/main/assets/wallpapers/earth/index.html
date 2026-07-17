@@ -44,6 +44,7 @@ const CFG = {
   moonRadius   : 0.2727, // Earth radii — TRUE scale: real size
   cloudRefresh : 3*3600*1000,  // live satellite clouds update every 3 h
   shadowFrac   : 0.25,   // fraction of the visible disk in shadow (on the left edge)
+  lockedRoll   : -90,    // deg roll for the far locked view (turn the map upright)
   /* location-lock: camera stays over the user's coords so Earth appears still
      and the Sun sweeps across for a real day/night cycle. lat/lon injected by
      the app as ?lock=1&lat=..&lon=.. ; lonOffset calibrates texture longitude. */
@@ -53,9 +54,9 @@ const CFG = {
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
   cuAltitudeKm   : 4000,
-  cuLookDown     : 68,       // location in the lower frame, clear curvature above
+  cuLookDown     : 80,       // location around mid-lower frame, curvature above
   cuAzimuth      : 300,
-  cuRoll         : -24,      // space to the upper-left, location to the lower-right
+  cuRoll         : -20,      // space to the upper-left, location to the lower-right
   cuFov          : 58,
   starSphereR  : 3000,
   starCatalog  : 'https://cdn.jsdelivr.net/gh/ofrohn/d3-celestial@master/data/stars.6.json'
@@ -789,6 +790,7 @@ function update(){
     camera.position.set(ldir[0]*camDist, ldir[1]*camDist, ldir[2]*camDist);
     setFromArr(camera.up, eclNorthArr(n));
     camera.lookAt(0,0,0);
+    camera.rotateZ(CFG.lockedRoll * D2R);   // turn the map upright
   } else {
     /* Full: fixed in the ecliptic plane, offset from the Sun so shadowFrac of the
        disk is dark (terminator on the left), ecliptic north up. */
