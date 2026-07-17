@@ -321,6 +321,11 @@ const earthUniforms = {
   uHasTopo :{ value: 0.0 },
   uNightBlur:{ value: 0.6 },
   uDetail  :{ value: 0.0 },
+  regDay  : { value: flatTex('#000000') },
+  regNight: { value: flatTex('#000000') },
+  uHasRegD:{ value: 0.0 },
+  uHasRegN:{ value: 0.0 },
+  uReg    : { value: new THREE.Vector4(0.5, 0.5, 1.0, 1.0) },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
   sunDir  : { value: new THREE.Vector3(1,0,0) }
@@ -342,6 +347,8 @@ const earthMat = new THREE.ShaderMaterial({
     uniform float uHasWater; uniform float uHasNight; uniform float uHasClouds;
     uniform float uHasTopo; uniform float uCloudShift; uniform vec3 sunDir;
     uniform float uNightBlur; uniform float uDetail;
+    uniform sampler2D regDay; uniform sampler2D regNight;
+    uniform float uHasRegD; uniform float uHasRegN; uniform vec4 uReg;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -362,8 +369,15 @@ const earthMat = new THREE.ShaderMaterial({
       float ca = dot(n, sunDir);
       float daylight = max(ca, 0.0);
       float dmix = smoothstep(-0.1, 0.15, dot(nGeo, sunDir));
+      /* hi-res regional patch (close-up): NASA GIBS 500m imagery around the
+         user's location, feather-blended into the global 8K map */
+      vec2 rr = vec2((fract(vUv.x - uReg.x + 0.5) - 0.5) / max(uReg.z, 1e-4),
+                     (vUv.y - uReg.y) / max(uReg.w, 1e-4));
+      vec2 ruv = clamp(rr*0.5 + 0.5, 0.0, 1.0);
+      float rin = 1.0 - smoothstep(0.80, 0.97, max(abs(rr.x), abs(rr.y)));
       /* work in linear light like a real camera pipeline */
       vec3 day = pow(texture2D(dayMap, vUv, -0.45).rgb, vec3(2.2));
+      day = mix(day, pow(texture2D(regDay, ruv, -0.35).rgb, vec3(2.2)), rin * uHasRegD);
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
       /* close-up only: fine terrain grain locked to the surface, breaks up
@@ -373,7 +387,7 @@ const earthMat = new THREE.ShaderMaterial({
         vec2 gi = floor(gp), gf = fract(gp); gf = gf*gf*(3.0-2.0*gf);
         float g = mix(mix(hash21(gi), hash21(gi+vec2(1,0)), gf.x),
                       mix(hash21(gi+vec2(0,1)), hash21(gi+vec2(1,1)), gf.x), gf.y);
-        col *= 1.0 + (g - 0.5) * 0.11 * dmix;
+        col *= 1.0 + (g - 0.5) * 0.11 * dmix * (1.0 - rin * uHasRegD);
       }
       /* no ocean sun reflection — testers found the specular blob distracting */
       /* cloud shadows: sample the cloud layer displaced along the sun direction */
@@ -398,7 +412,13 @@ const earthMat = new THREE.ShaderMaterial({
          no multi-tap duplicates or crawl. Bias is raised for the close-up. */
       vec3 nSharp = pow(texture2D(nightMap, vUv).rgb, vec3(2.2));
       vec3 nSoft  = pow(texture2D(nightMap, vUv, uNightBlur).rgb, vec3(2.2));
-      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) + nSharp * 0.22;
+      float rN = rin * uHasRegN;
+      /* regional VIIRS lights: crisp cores + a touch of glow from a soft mip */
+      vec3 rgN = pow(texture2D(regNight, ruv, 0.4).rgb, vec3(2.2));
+      vec3 rgG = pow(texture2D(regNight, ruv, 2.2).rgb, vec3(2.2));
+      nSharp = mix(nSharp, rgN + rgG*0.6, rN);
+      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) * (1.0 - 0.55*rN)
+                  + nSharp * (0.22 + 0.85*rN);
       col += lights * vec3(1.0, 0.80, 0.52) * (1.0 - dmix) * 2.1 * uHasNight;
       /* atmospheric scattering: soft haze thickening toward the limb */
       float mu = max(dot(nGeo, vd), 0.0);
@@ -665,6 +685,32 @@ const planetSprites = {};
 })();
 
 /* ---------- load imagery ---------- */
+/* Close-up only: fetch 500m/px NASA GIBS imagery for the region around the
+   user's location and hand it to the shader as a hi-res patch. */
+function loadRegional(){
+  if(CFG.mode !== 'closeup') return;
+  const ext = 20;
+  let la0 = CFG.userLat - ext, la1 = CFG.userLat + ext;
+  if(la0 < -89){ la1 += (-89 - la0); la0 = -89; }
+  if(la1 >  89){ la0 -= (la1 - 89);  la1 =  89; }
+  let lo0 = CFG.userLon - ext, lo1 = CFG.userLon + ext;
+  if(lo0 < -180){ lo1 += (-180 - lo0); lo0 = -180; }
+  if(lo1 >  180){ lo0 -= (lo1 - 180);  lo1 =  180; }
+  const latC = (la0 + la1)/2, lonC = (lo0 + lo1)/2;
+  const uc = (((lonC + CFG.lonOffset + 180)/360) % 1 + 1) % 1;
+  const vc = (latC + 90)/180;
+  earthUniforms.uReg.value.set(uc, vc, (lo1 - lo0)/720, (la1 - la0)/360);
+  const base = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+    '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=' +
+    '&FORMAT=image/jpeg&BBOX=' + lo0 + ',' + la0 + ',' + lo1 + ',' + la1;
+  const u = (layer, sz)=> base + '&LAYERS=' + layer + '&WIDTH=' + sz + '&HEIGHT=' + sz;
+  loadTex([u('BlueMarble_NextGeneration', 4096), u('BlueMarble_NextGeneration', 2048)])
+    .then(t=>{ if(t){ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; } });
+  loadTex([u('VIIRS_Black_Marble', 4096), u('VIIRS_Black_Marble', 2048)])
+    .then(t=>{ if(t){ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; } });
+}
+loadRegional();
+
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
   if(d){ earthUniforms.dayMap.value = d; }
