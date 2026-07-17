@@ -52,10 +52,10 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 2500,
-  cuLookDown     : 73,       // steep enough that the location sits in the lower frame
+  cuAltitudeKm   : 4000,
+  cuLookDown     : 68,       // location in the lower frame, clear curvature above
   cuAzimuth      : 300,
-  cuRoll         : -22,      // space to the upper-left, location to the lower-right
+  cuRoll         : -24,      // space to the upper-left, location to the lower-right
   cuFov          : 58,
   starSphereR  : 3000,
   starCatalog  : 'https://cdn.jsdelivr.net/gh/ofrohn/d3-celestial@master/data/stars.6.json'
@@ -694,7 +694,7 @@ function layout(){
     camera.updateProjectionMatrix();
     var veil = document.getElementById('veil');
     if(veil) veil.style.background =
-      'linear-gradient(to top, rgba(4,7,14,0.72) 0%, rgba(4,7,14,0.30) 22%, rgba(0,0,0,0) 46%)';
+      'linear-gradient(to top, rgba(4,7,14,0.55) 0%, rgba(4,7,14,0.20) 20%, rgba(0,0,0,0) 42%)';
     return;
   }
   if(CFG.mode === 'locked'){
