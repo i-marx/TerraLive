@@ -44,7 +44,7 @@ const CFG = {
   moonRadius   : 0.2727, // Earth radii — TRUE scale: real size
   cloudRefresh : 3*3600*1000,  // live satellite clouds update every 3 h
   shadowFrac   : 0.25,   // fraction of the visible disk in shadow (on the left edge)
-  lockedRoll   : -90,    // deg roll for the far locked view (turn the map upright)
+  lockedRoll   : 90,     // deg roll for the far locked view (upright)
   /* location-lock: camera stays over the user's coords so Earth appears still
      and the Sun sweeps across for a real day/night cycle. lat/lon injected by
      the app as ?lock=1&lat=..&lon=.. ; lonOffset calibrates texture longitude. */
@@ -53,7 +53,7 @@ const CFG = {
   userLon        : 0,
   lonOffset      : 0,
   /* close-up (locked, zoomed): ~600 km altitude, oblique, horizon upper-left */
-  cuAltitudeKm   : 4000,
+  cuAltitudeKm   : 8000,
   cuLookDown     : 80,       // location around mid-lower frame, curvature above
   cuAzimuth      : 300,
   cuRoll         : -20,      // space to the upper-left, location to the lower-right
