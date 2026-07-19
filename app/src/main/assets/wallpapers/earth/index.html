@@ -374,7 +374,7 @@ const earthMat = new THREE.ShaderMaterial({
       vec2 rr = vec2((fract(vUv.x - uReg.x + 0.5) - 0.5) / max(uReg.z, 1e-4),
                      (vUv.y - uReg.y) / max(uReg.w, 1e-4));
       vec2 ruv = clamp(rr*0.5 + 0.5, 0.0, 1.0);
-      float rin = 1.0 - smoothstep(0.80, 0.97, max(abs(rr.x), abs(rr.y)));
+      float rin = 1.0 - smoothstep(0.88, 0.985, max(abs(rr.x), abs(rr.y)));
       /* work in linear light like a real camera pipeline */
       vec3 day = pow(texture2D(dayMap, vUv, -0.45).rgb, vec3(2.2));
       day = mix(day, pow(texture2D(regDay, ruv, -0.35).rgb, vec3(2.2)), rin * uHasRegD);
@@ -689,25 +689,58 @@ const planetSprites = {};
    user's location and hand it to the shader as a hi-res patch. */
 function loadRegional(){
   if(CFG.mode !== 'closeup') return;
-  const ext = 20;
+  const ext = 28;
   let la0 = CFG.userLat - ext, la1 = CFG.userLat + ext;
   if(la0 < -89){ la1 += (-89 - la0); la0 = -89; }
   if(la1 >  89){ la0 -= (la1 - 89);  la1 =  89; }
-  let lo0 = CFG.userLon - ext, lo1 = CFG.userLon + ext;
-  if(lo0 < -180){ lo1 += (-180 - lo0); lo0 = -180; }
-  if(lo1 >  180){ lo0 -= (lo1 - 180);  lo1 =  180; }
+  const lo0 = CFG.userLon - ext, lo1 = CFG.userLon + ext;   /* may cross the date line */
   const latC = (la0 + la1)/2, lonC = (lo0 + lo1)/2;
   const uc = (((lonC + CFG.lonOffset + 180)/360) % 1 + 1) % 1;
   const vc = (latC + 90)/180;
   earthUniforms.uReg.value.set(uc, vc, (lo1 - lo0)/720, (la1 - la0)/360);
-  const base = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-    '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=' +
-    '&FORMAT=image/jpeg&BBOX=' + lo0 + ',' + la0 + ',' + lo1 + ',' + la1;
-  const u = (layer, sz)=> base + '&LAYERS=' + layer + '&WIDTH=' + sz + '&HEIGHT=' + sz;
-  loadTex([u('BlueMarble_NextGeneration', 4096), u('BlueMarble_NextGeneration', 2048)])
-    .then(t=>{ if(t){ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; } });
-  loadTex([u('VIIRS_Black_Marble', 4096), u('VIIRS_Black_Marble', 2048)])
-    .then(t=>{ if(t){ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; } });
+  const wmsURL = (layer, b0, b1, w, h)=> 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+    '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=&FORMAT=image/jpeg' +
+    '&BBOX=' + b0 + ',' + la0 + ',' + b1 + ',' + la1 + '&LAYERS=' + layer + '&WIDTH=' + w + '&HEIGHT=' + h;
+  const loadImg = url => new Promise(res=>{
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = ()=>res(im); im.onerror = ()=>res(null); im.src = url;
+  });
+  function finishTex(cv){
+    const t = new THREE.CanvasTexture(cv);
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = true; t.needsUpdate = true;
+    return t;
+  }
+  function loadLayer(layer, sz){
+    if(lo0 >= -180 && lo1 <= 180){
+      return loadImg(wmsURL(layer, lo0, lo1, sz, sz)).then(im=>{
+        if(!im) return null;
+        const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
+        cv.getContext('2d').drawImage(im, 0, 0, sz, sz);
+        return finishTex(cv);
+      });
+    }
+    /* box crosses the +-180 date line: fetch both halves and stitch them */
+    const aw = (lo0 < -180) ? (180 - (lo0 + 360)) : (180 - lo0);
+    const total = lo1 - lo0;
+    const wA = Math.max(8, Math.round(sz * aw / total)), wB = sz - wA;
+    const A = (lo0 < -180) ? [lo0 + 360, 180] : [lo0, 180];
+    const B = (lo0 < -180) ? [-180, lo1] : [-180, lo1 - 360];
+    return Promise.all([loadImg(wmsURL(layer, A[0], A[1], wA, sz)),
+                        loadImg(wmsURL(layer, B[0], B[1], wB, sz))]).then(([ia, ib])=>{
+      if(!ia || !ib) return null;
+      const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
+      const cx = cv.getContext('2d');
+      cx.drawImage(ia, 0, 0, wA, sz); cx.drawImage(ib, wA, 0, wB, sz);
+      return finishTex(cv);
+    });
+  }
+  const tryLayer = (layer, apply)=> loadLayer(layer, 4096)
+    .then(t=> t ? apply(t) : loadLayer(layer, 2048).then(t2=>{ if(t2) apply(t2); }));
+  tryLayer('BlueMarble_NextGeneration', t=>{ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; });
+  tryLayer('VIIRS_Black_Marble',        t=>{ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; });
 }
 loadRegional();
 
