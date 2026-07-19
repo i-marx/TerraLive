@@ -6,39 +6,39 @@
     android:background="@color/terra_bg"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="28dp">
-
-    <ImageView
-        android:layout_width="72dp"
-        android:layout_height="72dp"
-        android:layout_marginTop="24dp"
-        android:src="@drawable/ic_launcher_foreground"
-        android:contentDescription="@string/app_name" />
+    android:padding="26dp">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="46dp"
         android:text="@string/brand_word"
         android:textColor="@color/terra_white"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.32" />
+        android:textSize="32sp"
+        android:fontFamily="sans-serif-thin"
+        android:letterSpacing="0.52" />
+
+    <View
+        android:layout_width="26dp"
+        android:layout_height="1dp"
+        android:layout_marginTop="16dp"
+        android:background="@color/terra_gold" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="14dp"
         android:text="@string/brand_sub"
-        android:textColor="@color/terra_cyan"
-        android:textSize="11sp"
-        android:letterSpacing="0.42" />
+        android:textColor="@color/terra_gold"
+        android:textSize="10sp"
+        android:fontFamily="sans-serif-light"
+        android:letterSpacing="0.55" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="30dp"
         android:scrollbars="none">
 
         <LinearLayout
@@ -51,21 +51,25 @@
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSet"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="54dp"
+        android:layout_marginTop="18dp"
         android:text="@string/set_wallpaper"
-        android:textSize="16sp"
+        android:textSize="13sp"
+        android:textAllCaps="true"
+        android:letterSpacing="0.14"
+        android:fontFamily="sans-serif-medium"
         android:textColor="@color/terra_bg"
-        android:backgroundTint="@color/terra_blue"
-        app:cornerRadius="28dp" />
+        android:backgroundTint="@color/terra_gold"
+        app:cornerRadius="27dp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="4dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="6dp"
         android:gravity="center"
         android:text="@string/footnote"
         android:textColor="@color/terra_grey_dim"
-        android:textSize="11sp" />
+        android:textSize="10sp"
+        android:letterSpacing="0.06" />
 </LinearLayout>

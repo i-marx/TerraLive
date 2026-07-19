@@ -1,8 +1,12 @@
 <resources>
-    <color name="terra_bg">#060911</color>
+    <color name="terra_bg">#05070C</color>
+    <color name="terra_surface">#0A0E17</color>
+    <color name="terra_hairline">#1E2734</color>
+    <color name="terra_gold">#C9A96A</color>
+    <color name="terra_gold_dim">#7E6C45</color>
     <color name="terra_blue">#3B7BFF</color>
     <color name="terra_cyan">#7FD1FF</color>
-    <color name="terra_white">#F2F5F9</color>
+    <color name="terra_white">#EDEFF2</color>
     <color name="terra_grey">#8A93A6</color>
     <color name="terra_grey_dim">#4A5163</color>
     <color name="terra_amber">#FFB35C</color>

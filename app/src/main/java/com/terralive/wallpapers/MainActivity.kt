@@ -8,6 +8,7 @@ import android.widget.Toast
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.View
@@ -93,12 +94,12 @@ class MainActivity : AppCompatActivity() {
         for (w in Wallpapers.ALL) {
             val selected = w.id == selectedId
             val card = MaterialCardView(this).apply {
-                radius = dp(16f).toFloat()
-                setCardBackgroundColor(Color.parseColor("#0C1220"))
-                strokeWidth = if (selected) dp(2f) else dp(1f)
+                radius = dp(14f).toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.terra_surface))
+                strokeWidth = dp(1f)
                 strokeColor = ContextCompat.getColor(
                     this@MainActivity,
-                    if (selected) R.color.terra_blue else R.color.terra_grey_dim
+                    if (selected) R.color.terra_gold else R.color.terra_hairline
                 )
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
@@ -112,14 +113,15 @@ class MainActivity : AppCompatActivity() {
             }
             val inner = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(18f), dp(16f), dp(18f), dp(16f))
+                setPadding(dp(20f), dp(18f), dp(20f), dp(18f))
             }
             inner.addView(TextView(this).apply {
-                text = if (selected) "${w.title}   ●" else w.title
+                text = w.title
                 setTextColor(ContextCompat.getColor(this@MainActivity,
-                    if (selected) R.color.terra_blue else R.color.terra_white))
-                textSize = 18f
-                letterSpacing = 0.04f
+                    if (selected) R.color.terra_gold else R.color.terra_white))
+                textSize = 17f
+                letterSpacing = 0.06f
+                typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             })
             inner.addView(TextView(this).apply {
                 text = w.subtitle
@@ -133,10 +135,11 @@ class MainActivity : AppCompatActivity() {
         /* view-mode selector (earth only) */
         listView.addView(TextView(this).apply {
             text = "VIEW"
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_grey))
-            textSize = 11f
-            letterSpacing = 0.18f
-            setPadding(dp(4f), dp(8f), 0, dp(6f))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_gold_dim))
+            textSize = 10f
+            letterSpacing = 0.34f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(dp(6f), dp(16f), 0, dp(8f))
         })
         val currentMode = Wallpapers.viewMode(this)
         val modes = listOf(
@@ -147,10 +150,10 @@ class MainActivity : AppCompatActivity() {
         for ((id, title, sub) in modes) {
             val on = id == currentMode
             val card = MaterialCardView(this).apply {
-                radius = dp(16f).toFloat()
-                setCardBackgroundColor(Color.parseColor("#0C1220"))
-                strokeWidth = if (on) dp(2f) else dp(1f)
-                strokeColor = ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_blue else R.color.terra_grey_dim)
+                radius = dp(14f).toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.terra_surface))
+                strokeWidth = dp(1f)
+                strokeColor = ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_gold else R.color.terra_hairline)
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -159,12 +162,14 @@ class MainActivity : AppCompatActivity() {
             }
             val inner = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
+                setPadding(dp(20f), dp(14f), dp(20f), dp(14f))
             }
             inner.addView(TextView(this).apply {
-                text = if (on) "$title   ●" else title
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_blue else R.color.terra_white))
+                text = title
+                setTextColor(ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_gold else R.color.terra_white))
                 textSize = 15f
+                letterSpacing = 0.04f
+                typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             })
             inner.addView(TextView(this).apply {
                 text = sub
@@ -180,9 +185,10 @@ class MainActivity : AppCompatActivity() {
         listView.addView(TextView(this).apply {
             text = getString(R.string.coming_soon)
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_grey_dim))
-            textSize = 13f
+            textSize = 11f
+            letterSpacing = 0.08f
             gravity = android.view.Gravity.CENTER
-            setPadding(0, dp(6f), 0, 0)
+            setPadding(0, dp(12f), 0, 0)
         })
     }
 }

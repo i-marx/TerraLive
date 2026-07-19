@@ -1,6 +1,6 @@
 <resources>
     <style name="Theme.Terra" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="colorPrimary">@color/terra_blue</item>
+        <item name="colorPrimary">@color/terra_gold</item>
         <item name="android:windowBackground">@color/terra_bg</item>
         <item name="android:statusBarColor">@color/terra_bg</item>
         <item name="android:navigationBarColor">@color/terra_bg</item>
