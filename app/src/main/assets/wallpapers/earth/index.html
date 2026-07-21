@@ -327,6 +327,8 @@ const earthUniforms = {
   uHasRegN:{ value: 0.0 },
   uReg    : { value: new THREE.Vector4(0.5, 0.5, 1.0, 1.0) },
   uMoonDir: { value: new THREE.Vector3(0,0,1) },
+  snowMap : { value: flatTex('#000000') },
+  uHasSnow: { value: 0.0 },
   uMoonAmt: { value: 0.0 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
@@ -352,6 +354,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform sampler2D regDay; uniform sampler2D regNight;
     uniform float uHasRegD; uniform float uHasRegN; uniform vec4 uReg;
     uniform vec3 uMoonDir; uniform float uMoonAmt;
+    uniform sampler2D snowMap; uniform float uHasSnow;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -389,6 +392,12 @@ const earthMat = new THREE.ShaderMaterial({
         float dl  = dot(day, vec3(0.2126, 0.7152, 0.0722));
         float lift = wat * smoothstep(0.060, 0.008, dl);
         day = mix(day, vec3(0.030, 0.078, 0.168), lift * 0.60);
+      }
+      /* seasons: real daily snow cover (MODIS) whitens the land it truly covers */
+      if(uHasSnow > 0.5){
+        float sn = texture2D(snowMap, vUv).r;
+        float wat2 = (uHasWater > 0.5) ? texture2D(waterMap, vUv).r : 0.0;
+        day = mix(day, vec3(0.60, 0.66, 0.75), sn * (1.0 - wat2*0.85) * 0.85);
       }
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
@@ -891,6 +900,59 @@ try{
     }).catch(()=>{});
 }catch(e){}
 
+/* ---- SEASONS: real daily global snow cover from NASA MODIS ---- */
+try{
+  const fetchSnow=()=>{
+    const im=new Image(); im.crossOrigin='anonymous';
+    im.onload=()=>{
+      try{
+        const W=4096,H=2048;
+        const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+        const cx=cv.getContext('2d');
+        /* shift by lonOffset so the mask lines up with the sphere UVs */
+        const dx=Math.round((CFG.lonOffset/360)*W);
+        cx.drawImage(im, dx, 0, W, H);
+        if(dx!==0){ cx.drawImage(im, dx>0? dx-W : dx+W, 0, W, H); }
+        const d=cx.getImageData(0,0,W,H);
+        const p=d.data;
+        for(let i=0;i<p.length;i+=4){
+          /* GIBS NDSI palette paints snow warm (r >> b); background is grey */
+          const v=(p[i+3]>10 && p[i]>p[i+1]) ? Math.min(255,(p[i]-p[i+2])*2.4) : 0;
+          p[i]=p[i+1]=p[i+2]=v; p[i+3]=255;
+        }
+        cx.putImageData(d,0,0);
+        const t=new THREE.CanvasTexture(cv);
+        t.wrapS=THREE.RepeatWrapping;
+        t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+        t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+        t.generateMipmaps=true;
+        earthUniforms.snowMap.value=t; earthUniforms.uHasSnow.value=1.0;
+      }catch(e){}
+    };
+    im.onerror=()=>{};
+    im.src='https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'+
+      '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES='+
+      '&FORMAT=image/png&TRANSPARENT=TRUE&WIDTH=4096&HEIGHT=2048'+
+      '&BBOX=-180,-90,180,90&LAYERS=MODIS_Terra_NDSI_Snow_Cover';
+  };
+  fetchSnow(); setInterval(fetchSnow, 12*60*60*1000);
+}catch(e){}
+
+/* ---- THE SUN: real position, blazing glare, correctly occluded by the globe ----
+   (No fake ocean reflection. In close-up you catch true local sunrises.) */
+let sunCore=null, sunHalo=null;
+try{
+  const gt=glowTexture();
+  const mkSun=(scale,op,r,g,b)=>{
+    const m=new THREE.SpriteMaterial({ map:gt, transparent:true, depthWrite:false,
+      blending:THREE.AdditiveBlending, color:new THREE.Color(r,g,b), opacity:op });
+    const sp=new THREE.Sprite(m); sp.scale.set(scale,scale,1); scene.add(sp);
+    return sp;
+  };
+  sunCore=mkSun(46, 1.0, 1.0, 0.99, 0.94);
+  sunHalo=mkSun(230, 0.30, 1.0, 0.92, 0.78);
+}catch(e){}
+
 /* ---- METEORS: rare streaks, rate driven by the real shower calendar ---- */
 let meteor=null;
 try{
@@ -922,6 +984,12 @@ function updateExtras(gm, sd, mdU, illum){
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
+  /* the Sun at its true place in the sky */
+  if(sunCore){
+    const R=CFG.starSphereR*0.94;
+    sunCore.position.set(sd[0]*R, sd[1]*R, sd[2]*R);
+    sunHalo.position.copy(sunCore.position);
+  }
   /* lightning */
   if(stormCells && Math.random() < dt/1.1){ spawnFlash(gm, sd); if(Math.random()<0.30) spawnFlash(gm, sd); }
   for(const fl of flashes){
