@@ -949,8 +949,8 @@ try{
     const sp=new THREE.Sprite(m); sp.scale.set(scale,scale,1); scene.add(sp);
     return sp;
   };
-  sunCore=mkSun(46, 1.0, 1.0, 0.99, 0.94);
-  sunHalo=mkSun(230, 0.30, 1.0, 0.92, 0.78);
+  sunCore=mkSun(38, 1.0, 1.0, 0.99, 0.94);
+  sunHalo=mkSun(120, 0.20, 1.0, 0.92, 0.78);
 }catch(e){}
 
 /* ---- METEORS: rare streaks, rate driven by the real shower calendar ---- */
@@ -1084,8 +1084,23 @@ function loadRegional(){
       return finishTex(cv);
     });
   }
-  const tryLayer = (layer, apply)=> loadLayer(layer, 4096)
-    .then(t=> t ? apply(t) : loadLayer(layer, 2048).then(t2=>{ if(t2) apply(t2); }));
+  /* keep retrying until the hi-res patch is in: a failed fetch must never
+     strand the close-up on the washed-out global fallback */
+  const tryLayer = (layer, apply)=>{
+    let done=false, tries=0;
+    const attempt=()=>{
+      if(done) return;
+      tries++;
+      loadLayer(layer, 4096).then(t=>{
+        if(t){ done=true; apply(t); return; }
+        return loadLayer(layer, 2048).then(t2=>{
+          if(t2){ done=true; apply(t2); return; }
+          if(tries<12) setTimeout(attempt, Math.min(30000*tries, 240000));
+        });
+      }).catch(()=>{ if(tries<12) setTimeout(attempt, Math.min(30000*tries, 240000)); });
+    };
+    attempt();
+  };
   tryLayer('BlueMarble_NextGeneration', t=>{ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; });
   tryLayer('VIIRS_Black_Marble',        t=>{ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; });
 }
