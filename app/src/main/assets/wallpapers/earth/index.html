@@ -351,6 +351,9 @@ const earthUniforms = {
   uHasRegD:{ value: 0.0 },
   uHasRegN:{ value: 0.0 },
   uReg    : { value: new THREE.Vector4(0.5, 0.5, 1.0, 1.0) },
+  regOut  : { value: flatTex('#000000') },
+  uHasRegO:{ value: 0.0 },
+  uRegO   : { value: new THREE.Vector4(0.5, 0.5, 1.0, 1.0) },
   uMoonDir: { value: new THREE.Vector3(0,0,1) },
   snowMap : { value: flatTex('#000000') },
   uHasSnow: { value: 0.0 },
@@ -378,6 +381,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform float uNightBlur; uniform float uDetail;
     uniform sampler2D regDay; uniform sampler2D regNight;
     uniform float uHasRegD; uniform float uHasRegN; uniform vec4 uReg;
+    uniform sampler2D regOut; uniform float uHasRegO; uniform vec4 uRegO;
     uniform vec3 uMoonDir; uniform float uMoonAmt;
     uniform sampler2D snowMap; uniform float uHasSnow;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
@@ -406,8 +410,21 @@ const earthMat = new THREE.ShaderMaterial({
                      (vUv.y - uReg.y) / max(uReg.w, 1e-4));
       vec2 ruv = clamp(rr*0.5 + 0.5, 0.0, 1.0);
       float rin = 1.0 - smoothstep(0.88, 0.985, max(abs(rr.x), abs(rr.y)));
+      vec2 rr2 = vec2((fract(vUv.x - uRegO.x + 0.5) - 0.5) / max(uRegO.z, 1e-4),
+                      (vUv.y - uRegO.y) / max(uRegO.w, 1e-4));
+      vec2 ruv2 = clamp(rr2*0.5 + 0.5, 0.0, 1.0);
+      float rin2 = 1.0 - smoothstep(0.86, 0.99, max(abs(rr2.x), abs(rr2.y)));
       /* work in linear light like a real camera pipeline */
       vec3 day = pow(texture2D(dayMap, vUv, -0.45).rgb, vec3(2.2));
+      /* close-up: grade the residual global map toward the NASA palette so the
+         patch boundary stops reading as a washed-out half */
+      if(uDetail > 0.5 && uHasRegO > 0.5){
+        float gl = dot(day, vec3(0.2126, 0.7152, 0.0722));
+        day = mix(vec3(gl), day, 1.18) * vec3(0.90, 0.95, 0.93);
+      }
+      /* wide tier: same NASA imagery out to +-55deg, covers the visible ground */
+      day = mix(day, pow(texture2D(regOut, ruv2, -0.2).rgb, vec3(2.2)), rin2 * uHasRegO);
+      /* sharp inner tier overrides */
       day = mix(day, pow(texture2D(regDay, ruv, -0.35).rgb, vec3(2.2)), rin * uHasRegD);
       /* ocean lift: deep water in the source imagery is crushed near black.
          Real oceans seen from space read as rich blue (atmospheric scattering),
@@ -1087,18 +1104,19 @@ function updateExtras(gm, sd, mdU, illum){
    user's location and hand it to the shader as a hi-res patch. */
 function loadRegional(){
   if(CFG.mode !== 'closeup') return;
-  const ext = 28;
-  let la0 = CFG.userLat - ext, la1 = CFG.userLat + ext;
-  if(la0 < -89){ la1 += (-89 - la0); la0 = -89; }
-  if(la1 >  89){ la0 -= (la1 - 89);  la1 =  89; }
-  const lo0 = CFG.userLon - ext, lo1 = CFG.userLon + ext;   /* may cross the date line */
-  const latC = (la0 + la1)/2, lonC = (lo0 + lo1)/2;
-  const uc = (((lonC + CFG.lonOffset + 180)/360) % 1 + 1) % 1;
-  const vc = (latC + 90)/180;
-  earthUniforms.uReg.value.set(uc, vc, (lo1 - lo0)/720, (la1 - la0)/360);
-  const wmsURL = (layer, b0, b1, w, h)=> 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+  const mkBox=(ext)=>{
+    let la0=CFG.userLat-ext, la1=CFG.userLat+ext;
+    if(la0 < -89){ la1 += (-89 - la0); la0 = -89; }
+    if(la1 >  89){ la0 -= (la1 - 89);  la1 =  89; }
+    const lo0=CFG.userLon-ext, lo1=CFG.userLon+ext;   /* may cross the date line */
+    return { la0, la1, lo0, lo1,
+      uc: ((((lo0+lo1)/2 + CFG.lonOffset + 180)/360) % 1 + 1) % 1,
+      vc: ((la0+la1)/2 + 90)/180,
+      du: (lo1-lo0)/720, dv: (la1-la0)/360 };
+  };
+  const wmsURL=(b, layer, b0, b1, w, h)=> 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
     '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=&FORMAT=image/jpeg' +
-    '&BBOX=' + b0 + ',' + la0 + ',' + b1 + ',' + la1 + '&LAYERS=' + layer + '&WIDTH=' + w + '&HEIGHT=' + h;
+    '&BBOX=' + b0 + ',' + b.la0 + ',' + b1 + ',' + b.la1 + '&LAYERS=' + layer + '&WIDTH=' + w + '&HEIGHT=' + h;
   const loadImg = url => new Promise(res=>{
     const im = new Image(); im.crossOrigin = 'anonymous';
     im.onload = ()=>res(im); im.onerror = ()=>res(null); im.src = url;
@@ -1111,9 +1129,9 @@ function loadRegional(){
     t.generateMipmaps = true; t.needsUpdate = true;
     return t;
   }
-  function loadLayer(layer, sz){
-    if(lo0 >= -180 && lo1 <= 180){
-      return loadImg(wmsURL(layer, lo0, lo1, sz, sz)).then(im=>{
+  function loadLayer(b, layer, sz){
+    if(b.lo0 >= -180 && b.lo1 <= 180){
+      return loadImg(wmsURL(b, layer, b.lo0, b.lo1, sz, sz)).then(im=>{
         if(!im) return null;
         const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
         cv.getContext('2d').drawImage(im, 0, 0, sz, sz);
@@ -1121,13 +1139,13 @@ function loadRegional(){
       });
     }
     /* box crosses the +-180 date line: fetch both halves and stitch them */
-    const aw = (lo0 < -180) ? (180 - (lo0 + 360)) : (180 - lo0);
-    const total = lo1 - lo0;
+    const aw = (b.lo0 < -180) ? (180 - (b.lo0 + 360)) : (180 - b.lo0);
+    const total = b.lo1 - b.lo0;
     const wA = Math.max(8, Math.round(sz * aw / total)), wB = sz - wA;
-    const A = (lo0 < -180) ? [lo0 + 360, 180] : [lo0, 180];
-    const B = (lo0 < -180) ? [-180, lo1] : [-180, lo1 - 360];
-    return Promise.all([loadImg(wmsURL(layer, A[0], A[1], wA, sz)),
-                        loadImg(wmsURL(layer, B[0], B[1], wB, sz))]).then(([ia, ib])=>{
+    const A = (b.lo0 < -180) ? [b.lo0 + 360, 180] : [b.lo0, 180];
+    const B = (b.lo0 < -180) ? [-180, b.lo1] : [-180, b.lo1 - 360];
+    return Promise.all([loadImg(wmsURL(b, layer, A[0], A[1], wA, sz)),
+                        loadImg(wmsURL(b, layer, B[0], B[1], wB, sz))]).then(([ia, ib])=>{
       if(!ia || !ib) return null;
       const cv = document.createElement('canvas'); cv.width = sz; cv.height = sz;
       const cx = cv.getContext('2d');
@@ -1135,25 +1153,30 @@ function loadRegional(){
       return finishTex(cv);
     });
   }
-  /* keep retrying until the hi-res patch is in: a failed fetch must never
-     strand the close-up on the washed-out global fallback */
-  const tryLayer = (layer, apply)=>{
+  /* keep retrying until each tier is in: a failed fetch must never strand the
+     close-up on the washed-out global fallback */
+  const tryTier=(b, layer, sizes, apply)=>{
     let done=false, tries=0;
     const attempt=()=>{
       if(done) return;
       tries++;
-      loadLayer(layer, 4096).then(t=>{
-        if(t){ done=true; apply(t); return; }
-        return loadLayer(layer, 2048).then(t2=>{
-          if(t2){ done=true; apply(t2); return; }
-          if(tries<12) setTimeout(attempt, Math.min(30000*tries, 240000));
-        });
+      const chain = sizes.reduce((p, sz)=> p.then(t=> t || loadLayer(b, layer, sz)), Promise.resolve(null));
+      chain.then(t=>{
+        if(t){ done=true; apply(t); }
+        else if(tries<12) setTimeout(attempt, Math.min(30000*tries, 240000));
       }).catch(()=>{ if(tries<12) setTimeout(attempt, Math.min(30000*tries, 240000)); });
     };
     attempt();
   };
-  tryLayer('BlueMarble_NextGeneration', t=>{ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; });
-  tryLayer('VIIRS_Black_Marble',        t=>{ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; });
+  const inner=mkBox(28), outer=mkBox(55);
+  earthUniforms.uReg.value.set(inner.uc, inner.vc, inner.du, inner.dv);
+  earthUniforms.uRegO.value.set(outer.uc, outer.vc, outer.du, outer.dv);
+  tryTier(inner, 'BlueMarble_NextGeneration', [4096, 2048],
+    t=>{ earthUniforms.regDay.value = t; earthUniforms.uHasRegD.value = 1.0; });
+  tryTier(inner, 'VIIRS_Black_Marble', [4096, 2048],
+    t=>{ earthUniforms.regNight.value = t; earthUniforms.uHasRegN.value = 1.0; });
+  tryTier(outer, 'BlueMarble_NextGeneration', [3072, 2048],
+    t=>{ earthUniforms.regOut.value = t; earthUniforms.uHasRegO.value = 1.0; });
 }
 loadRegional();
 
