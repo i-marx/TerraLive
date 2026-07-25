@@ -74,11 +74,12 @@ const CFG = {
     else if(CFG.mode !== 'full') CFG.mode = 'full';
     if(q.has('lonOffset')) CFG.lonOffset = parseFloat(q.get('lonOffset')) || 0;
     /* optional close-up camera overrides (marketing / PC use) */
-    if(q.has('az'))       CFG.cuAzimuth    = parseFloat(q.get('az'))       || CFG.cuAzimuth;
-    if(q.has('lookdown')) CFG.cuLookDown   = parseFloat(q.get('lookdown')) || CFG.cuLookDown;
-    if(q.has('roll'))     CFG.cuRoll       = parseFloat(q.get('roll'))     || CFG.cuRoll;
-    if(q.has('alt'))      CFG.cuAltitudeKm = parseFloat(q.get('alt'))      || CFG.cuAltitudeKm;
-    if(q.has('fov'))      CFG.cuFov        = parseFloat(q.get('fov'))      || CFG.cuFov;
+    const ovr=(k,set)=>{ if(q.has(k)){ const v=parseFloat(q.get(k)); if(isFinite(v)) set(v); } };
+    ovr('az',       v=>CFG.cuAzimuth=v);
+    ovr('lookdown', v=>CFG.cuLookDown=v);
+    ovr('roll',     v=>CFG.cuRoll=v);
+    ovr('alt',      v=>CFG.cuAltitudeKm=v);
+    ovr('fov',      v=>CFG.cuFov=v);
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
@@ -515,7 +516,8 @@ const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 384, 384), earthMat);
 scene.add(earth);
 
 /* ---------- clouds ---------- */
-const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value } };
+const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value },
+  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt };
 const cloudMat = new THREE.ShaderMaterial({
   uniforms: cloudUniforms, transparent: true, depthWrite: false,
   vertexShader: `
@@ -526,6 +528,7 @@ const cloudMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
+    uniform vec3 uMoonDir; uniform float uMoonAmt;
     varying vec3 vN; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
@@ -541,7 +544,11 @@ const cloudMat = new THREE.ShaderMaterial({
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
       vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
-      vec3 nightC = vec3(0.020, 0.028, 0.045);
+      /* night clouds are moonlit: bright grey-blue decks under a full moon,
+         faint slate at new moon - so weather never just evaporates at night */
+      float mlit = max(dot(n, uMoonDir), 0.0);
+      vec3 nightC = vec3(0.026, 0.034, 0.052)
+                  + vec3(0.115, 0.135, 0.175) * mlit * uMoonAmt;
       vec3 c = mix(nightC, dayC, dm);
       c = pow(aces(c), vec3(1.0/2.2));
       /* keep night clouds fairly opaque so they read as shapes over the lights */
