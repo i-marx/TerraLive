@@ -1213,6 +1213,16 @@ function layout(){
   const w = (CFG.demo && CFG.demoW) ? CFG.demoW : window.innerWidth,
         h = (CFG.demo && CFG.demoH) ? CFG.demoH : window.innerHeight;
   renderer.setSize(w, h);
+  /* demo mode: render at the exact video resolution but scale the on-screen
+     preview to fit the window (letterboxed), so what you see is the video */
+  if(CFG.demo && CFG.demoW){
+    const k = Math.min(window.innerWidth/w, window.innerHeight/h);
+    const st = renderer.domElement.style;
+    st.width  = (w*k)+'px';   st.height = (h*k)+'px';
+    st.position = 'absolute';
+    st.left = ((window.innerWidth  - w*k)/2)+'px';
+    st.top  = ((window.innerHeight - h*k)/2)+'px';
+  }
   camera.aspect = w/h;
   camera.clearViewOffset();
   if(CFG.mode === 'closeup'){
