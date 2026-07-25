@@ -73,6 +73,12 @@ const CFG = {
     if(isFinite(la) && isFinite(lo)){ CFG.userLat = la; CFG.userLon = lo; }
     else if(CFG.mode !== 'full') CFG.mode = 'full';
     if(q.has('lonOffset')) CFG.lonOffset = parseFloat(q.get('lonOffset')) || 0;
+    /* optional close-up camera overrides (marketing / PC use) */
+    if(q.has('az'))       CFG.cuAzimuth    = parseFloat(q.get('az'))       || CFG.cuAzimuth;
+    if(q.has('lookdown')) CFG.cuLookDown   = parseFloat(q.get('lookdown')) || CFG.cuLookDown;
+    if(q.has('roll'))     CFG.cuRoll       = parseFloat(q.get('roll'))     || CFG.cuRoll;
+    if(q.has('alt'))      CFG.cuAltitudeKm = parseFloat(q.get('alt'))      || CFG.cuAltitudeKm;
+    if(q.has('fov'))      CFG.cuFov        = parseFloat(q.get('fov'))      || CFG.cuFov;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
