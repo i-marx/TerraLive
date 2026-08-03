@@ -43,10 +43,10 @@ object Wallpapers {
         if (id != "earth") return base
         val p = prefs(ctx)
         val mode = p.getString(KEY_MODE, "full") ?: "full"
-        if (mode == "full") { val lk = p.getInt(KEY_LOOK, 0); return if (lk > 0) "$base?look=$lk" else base }
+        if (mode == "full") { val lk = p.getInt(KEY_LOOK, 3); return if (lk > 0) "$base?look=$lk" else base }
         val lat = p.getFloat(KEY_LAT, Float.NaN)
         val lon = p.getFloat(KEY_LON, Float.NaN)
-        val look = p.getInt(KEY_LOOK, 0)
+        val look = p.getInt(KEY_LOOK, 3)
         if (lat.isNaN() || lon.isNaN()) return if (look > 0) "$base?look=$look" else base
         return "$base?mode=$mode&lat=$lat&lon=$lon&look=$look"
     }

@@ -80,7 +80,8 @@ const CFG = {
     ovr('roll',     v=>CFG.cuRoll=v);
     ovr('alt',      v=>CFG.cuAltitudeKm=v);
     ovr('fov',      v=>CFG.cuFov=v);
-    if(q.has('look')) CFG.look = parseFloat(q.get('look')) || 0;
+    CFG.look = 3;   /* Marx's pick: maximum polarizer */
+    if(q.has('look')){ const lv=parseFloat(q.get('look')); if(isFinite(lv)) CFG.look = lv; }
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){

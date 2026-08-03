@@ -191,7 +191,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(6f), dp(16f), 0, dp(8f))
         })
         val lookRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val curLook = Wallpapers.prefs(this).getInt(Wallpapers.KEY_LOOK, 0)
+        val curLook = Wallpapers.prefs(this).getInt(Wallpapers.KEY_LOOK, 3)
         for (i in 0..5) {
             val on = i == curLook
             lookRow.addView(TextView(this).apply {
