@@ -80,6 +80,7 @@ const CFG = {
     ovr('roll',     v=>CFG.cuRoll=v);
     ovr('alt',      v=>CFG.cuAltitudeKm=v);
     ovr('fov',      v=>CFG.cuFov=v);
+    if(q.has('look')) CFG.look = parseFloat(q.get('look')) || 0;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
@@ -380,6 +381,7 @@ const earthUniforms = {
   uMoonDir: { value: new THREE.Vector3(0,0,1) },
   snowMap : { value: flatTex('#000000') },
   uHasSnow: { value: 0.0 },
+  uLook   : { value: 0.0 },
   uMoonAmt: { value: 0.0 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
@@ -407,6 +409,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform sampler2D regOut; uniform float uHasRegO; uniform vec4 uRegO;
     uniform vec3 uMoonDir; uniform float uMoonAmt;
     uniform sampler2D snowMap; uniform float uHasSnow;
+    uniform float uLook;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -456,7 +459,7 @@ const earthMat = new THREE.ShaderMaterial({
         float wat = texture2D(waterMap, vUv).r;
         float dl  = dot(day, vec3(0.2126, 0.7152, 0.0722));
         float lift = wat * smoothstep(0.060, 0.008, dl);
-        day = mix(day, vec3(0.042, 0.098, 0.190), lift * 0.72);
+        day = mix(day, vec3(0.042, 0.098, 0.190), lift * ((abs(uLook-1.0)<0.5) ? 0.22 : 0.72));
       }
       /* seasons: real daily snow cover (MODIS) whitens the land it truly covers */
       if(uHasSnow > 0.5){
@@ -521,6 +524,19 @@ const earthMat = new THREE.ShaderMaterial({
       col += day * vec3(0.32, 0.44, 0.64) * mlit * (1.0 - dmix) * 0.055 * uMoonAmt;
       /* natural-colour grade + filmic curve */
       col = mix(col, col * vec3(0.96, 1.00, 1.05), 0.10);
+      /* LOOK variants for taste testing (?look=N) */
+      float lk = uLook;
+      if(abs(lk-1.0)<0.5){        /* 1 deep-ocean drama */
+        float l1=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l1),col,1.24);
+      } else if(abs(lk-2.0)<0.5){ /* 2 vivid */
+        float l2=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l2),col,1.38); col=pow(col,vec3(1.10));
+      } else if(abs(lk-3.0)<0.5){ /* 3 natural flat */
+        float l3=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l3),col,0.96);
+      } else if(abs(lk-4.0)<0.5){ /* 4 warm film */
+        col*=vec3(1.07,1.00,0.91); float l4=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l4),col,1.16);
+      } else if(abs(lk-5.0)<0.5){ /* 5 crisp cold */
+        col*=vec3(0.95,1.00,1.08); float l5=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l5),col,1.28); col=pow(col,vec3(1.06));
+      }
       col = aces(col);
       float lumi = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(vec3(lumi), col, 1.14);
@@ -1094,6 +1110,7 @@ function updateExtras(gm, sd, mdU, illum){
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
+  earthUniforms.uLook.value=CFG.look||0;
   /* the Sun at its true place in the sky */
   if(sunCore){
     const R=CFG.starSphereR*0.94;

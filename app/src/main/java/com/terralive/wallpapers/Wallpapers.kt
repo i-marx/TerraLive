@@ -17,6 +17,7 @@ object Wallpapers {
     const val KEY_LOCK = "lock_location"     // legacy Boolean (kept for compatibility)
     const val KEY_LAT = "user_lat"           // Float
     const val KEY_LON = "user_lon"           // Float
+    const val KEY_LOOK = "look_variant"      // Int 0..5 (testing)
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
@@ -42,11 +43,12 @@ object Wallpapers {
         if (id != "earth") return base
         val p = prefs(ctx)
         val mode = p.getString(KEY_MODE, "full") ?: "full"
-        if (mode == "full") return base
+        if (mode == "full") { val lk = p.getInt(KEY_LOOK, 0); return if (lk > 0) "$base?look=$lk" else base }
         val lat = p.getFloat(KEY_LAT, Float.NaN)
         val lon = p.getFloat(KEY_LON, Float.NaN)
-        if (lat.isNaN() || lon.isNaN()) return base
-        return "$base?mode=$mode&lat=$lat&lon=$lon"
+        val look = p.getInt(KEY_LOOK, 0)
+        if (lat.isNaN() || lon.isNaN()) return if (look > 0) "$base?look=$look" else base
+        return "$base?mode=$mode&lat=$lat&lon=$lon&look=$look"
     }
 
     fun viewMode(ctx: Context) = prefs(ctx).getString(KEY_MODE, "full") ?: "full"
@@ -57,7 +59,7 @@ object Wallpapers {
         e.apply()
     }
 
-    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun selected(ctx: Context): String =
         prefs(ctx).getString(KEY_SELECTED, DEFAULT) ?: DEFAULT
