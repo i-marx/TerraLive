@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace = "com.terralive.wallpapers"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.terralive.wallpapers"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 38
+        targetSdk = 36
+        versionCode = 39
         versionName = "1.0"
     }
     signingConfigs {
