@@ -459,7 +459,7 @@ const earthMat = new THREE.ShaderMaterial({
         float wat = texture2D(waterMap, vUv).r;
         float dl  = dot(day, vec3(0.2126, 0.7152, 0.0722));
         float lift = wat * smoothstep(0.060, 0.008, dl);
-        day = mix(day, vec3(0.042, 0.098, 0.190), lift * ((abs(uLook-1.0)<0.5) ? 0.22 : 0.72));
+        day = mix(day, vec3(0.042, 0.098, 0.190), lift * 0.22);
       }
       /* seasons: real daily snow cover (MODIS) whitens the land it truly covers */
       if(uHasSnow > 0.5){
@@ -524,18 +524,24 @@ const earthMat = new THREE.ShaderMaterial({
       col += day * vec3(0.32, 0.44, 0.64) * mlit * (1.0 - dmix) * 0.055 * uMoonAmt;
       /* natural-colour grade + filmic curve */
       col = mix(col, col * vec3(0.96, 1.00, 1.05), 0.10);
-      /* LOOK variants for taste testing (?look=N) */
+      /* WINNER GRADE (deep-ocean look) + polarizer, strength via ?look=N
+         0 = mild polarize (default)  1 = medium  2 = strong  3 = max
+         4 = winner without polarizer (reference)  5 = old default (reference) */
       float lk = uLook;
-      if(abs(lk-1.0)<0.5){        /* 1 deep-ocean drama */
-        float l1=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l1),col,1.24);
-      } else if(abs(lk-2.0)<0.5){ /* 2 vivid */
-        float l2=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l2),col,1.38); col=pow(col,vec3(1.10));
-      } else if(abs(lk-3.0)<0.5){ /* 3 natural flat */
-        float l3=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l3),col,0.96);
-      } else if(abs(lk-4.0)<0.5){ /* 4 warm film */
-        col*=vec3(1.07,1.00,0.91); float l4=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l4),col,1.16);
-      } else if(abs(lk-5.0)<0.5){ /* 5 crisp cold */
-        col*=vec3(0.95,1.00,1.08); float l5=dot(col,vec3(0.2126,0.7152,0.0722)); col=mix(vec3(l5),col,1.28); col=pow(col,vec3(1.06));
+      float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      if(lk < 3.5){
+        col = mix(vec3(l0), col, 1.24);            /* winner saturation */
+        float base = 0.0;
+        if(abs(lk-1.0)<0.5) base=0.35;
+        else if(abs(lk-2.0)<0.5) base=0.65;
+        else if(abs(lk-3.0)<0.5) base=1.0;
+        float k = 0.25 + 0.75*base;                 /* polarizer strength */
+        col = pow(col, vec3(1.0 + 0.10*k));         /* darker mids */
+        col *= (1.0 - 0.10*k);                      /* overall dim */
+        float l1 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col = mix(vec3(l1), col, 1.0 + 0.14*k);     /* denser colour */
+      } else if(abs(lk-4.0)<0.5){
+        col = mix(vec3(l0), col, 1.24);             /* winner, no polarize */
       }
       col = aces(col);
       float lumi = dot(col, vec3(0.2126, 0.7152, 0.0722));
