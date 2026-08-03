@@ -94,12 +94,13 @@ class MainActivity : AppCompatActivity() {
         for (w in Wallpapers.ALL) {
             val selected = w.id == selectedId
             val card = MaterialCardView(this).apply {
-                radius = dp(14f).toFloat()
-                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.terra_surface))
+                radius = dp(20f).toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity,
+                    if (selected) R.color.aero_glass_hi else R.color.aero_glass))
                 strokeWidth = dp(1f)
                 strokeColor = ContextCompat.getColor(
                     this@MainActivity,
-                    if (selected) R.color.terra_gold else R.color.terra_hairline
+                    if (selected) R.color.aero_stroke_hi else R.color.aero_stroke
                 )
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
@@ -118,7 +119,7 @@ class MainActivity : AppCompatActivity() {
             inner.addView(TextView(this).apply {
                 text = w.title
                 setTextColor(ContextCompat.getColor(this@MainActivity,
-                    if (selected) R.color.terra_gold else R.color.terra_white))
+                    if (selected) R.color.aero_ice else R.color.aero_text))
                 textSize = 17f
                 letterSpacing = 0.06f
                 typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
@@ -135,7 +136,7 @@ class MainActivity : AppCompatActivity() {
         /* view-mode selector (earth only) */
         listView.addView(TextView(this).apply {
             text = "VIEW"
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_gold_dim))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
             textSize = 10f
             letterSpacing = 0.34f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -150,10 +151,11 @@ class MainActivity : AppCompatActivity() {
         for ((id, title, sub) in modes) {
             val on = id == currentMode
             val card = MaterialCardView(this).apply {
-                radius = dp(14f).toFloat()
-                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.terra_surface))
+                radius = dp(20f).toFloat()
+                setCardBackgroundColor(ContextCompat.getColor(this@MainActivity,
+                    if (on) R.color.aero_glass_hi else R.color.aero_glass))
                 strokeWidth = dp(1f)
-                strokeColor = ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_gold else R.color.terra_hairline)
+                strokeColor = ContextCompat.getColor(this@MainActivity, if (on) R.color.aero_stroke_hi else R.color.aero_stroke)
                 cardElevation = 0f
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -166,7 +168,7 @@ class MainActivity : AppCompatActivity() {
             }
             inner.addView(TextView(this).apply {
                 text = title
-                setTextColor(ContextCompat.getColor(this@MainActivity, if (on) R.color.terra_gold else R.color.terra_white))
+                setTextColor(ContextCompat.getColor(this@MainActivity, if (on) R.color.aero_ice else R.color.aero_text))
                 textSize = 15f
                 letterSpacing = 0.04f
                 typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
@@ -184,7 +186,7 @@ class MainActivity : AppCompatActivity() {
         /* LOOK variants - temporary testing row */
         listView.addView(TextView(this).apply {
             text = "LOOK (TESTING)"
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_gold_dim))
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
             textSize = 10f
             letterSpacing = 0.34f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -199,9 +201,9 @@ class MainActivity : AppCompatActivity() {
                 gravity = android.view.Gravity.CENTER
                 textSize = 14f
                 setTextColor(ContextCompat.getColor(this@MainActivity,
-                    if (on) R.color.terra_bg else R.color.terra_white))
+                    if (on) R.color.aero_bg else R.color.aero_text))
                 setBackgroundColor(ContextCompat.getColor(this@MainActivity,
-                    if (on) R.color.terra_gold else R.color.terra_surface))
+                    if (on) R.color.aero_ice else R.color.aero_glass))
                 layoutParams = LinearLayout.LayoutParams(0, dp(38f), 1f).apply {
                     rightMargin = if (i < 5) dp(6f) else 0
                 }

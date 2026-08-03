@@ -1,13 +1,25 @@
 <resources>
-    <color name="terra_bg">#05070C</color>
-    <color name="terra_surface">#0A0E17</color>
-    <color name="terra_hairline">#1E2734</color>
-    <color name="terra_gold">#C9A96A</color>
-    <color name="terra_gold_dim">#7E6C45</color>
+    <color name="aero_bg">#030507</color>
+    <color name="aero_glow">#0C1626</color>
+    <color name="aero_glass">#0DFFFFFF</color>
+    <color name="aero_glass_hi">#1AFFFFFF</color>
+    <color name="aero_stroke">#12FFFFFF</color>
+    <color name="aero_stroke_hi">#5A9ECFFF</color>
+    <color name="aero_ice">#9ECFFF</color>
+    <color name="aero_text">#EBEFF4</color>
+    <color name="aero_text_dim">#8C96A4</color>
+    <color name="aero_text_faint">#55606E</color>
+    <color name="aero_button">#EDF2F7</color>
+    <!-- legacy names still referenced -->
+    <color name="terra_bg">#030507</color>
+    <color name="terra_surface">#0DFFFFFF</color>
+    <color name="terra_hairline">#12FFFFFF</color>
+    <color name="terra_gold">#9ECFFF</color>
+    <color name="terra_gold_dim">#55606E</color>
     <color name="terra_blue">#3B7BFF</color>
     <color name="terra_cyan">#7FD1FF</color>
-    <color name="terra_white">#EDEFF2</color>
-    <color name="terra_grey">#8A93A6</color>
-    <color name="terra_grey_dim">#4A5163</color>
+    <color name="terra_white">#EBEFF4</color>
+    <color name="terra_grey">#8C96A4</color>
+    <color name="terra_grey_dim">#55606E</color>
     <color name="terra_amber">#FFB35C</color>
 </resources>
