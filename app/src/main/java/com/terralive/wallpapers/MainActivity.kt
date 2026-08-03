@@ -183,39 +183,6 @@ class MainActivity : AppCompatActivity() {
             listView.addView(card)
         }
 
-        /* LOOK variants - temporary testing row */
-        listView.addView(TextView(this).apply {
-            text = "LOOK (TESTING)"
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
-            textSize = 10f
-            letterSpacing = 0.34f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(dp(6f), dp(16f), 0, dp(8f))
-        })
-        val lookRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val curLook = Wallpapers.prefs(this).getInt(Wallpapers.KEY_LOOK, 3)
-        for (i in 0..5) {
-            val on = i == curLook
-            lookRow.addView(TextView(this).apply {
-                text = i.toString()
-                gravity = android.view.Gravity.CENTER
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(this@MainActivity,
-                    if (on) R.color.aero_bg else R.color.aero_text))
-                setBackgroundColor(ContextCompat.getColor(this@MainActivity,
-                    if (on) R.color.aero_ice else R.color.aero_glass))
-                layoutParams = LinearLayout.LayoutParams(0, dp(38f), 1f).apply {
-                    rightMargin = if (i < 5) dp(6f) else 0
-                }
-                setOnClickListener {
-                    Wallpapers.prefs(this@MainActivity).edit()
-                        .putInt(Wallpapers.KEY_LOOK, i).apply()
-                    renderList()
-                }
-            })
-        }
-        listView.addView(lookRow)
-
         /* teaser for the upcoming collection */
         listView.addView(TextView(this).apply {
             text = getString(R.string.coming_soon)
