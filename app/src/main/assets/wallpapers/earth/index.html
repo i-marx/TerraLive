@@ -459,7 +459,7 @@ const earthMat = new THREE.ShaderMaterial({
         float wat = texture2D(waterMap, vUv).r;
         float dl  = dot(day, vec3(0.2126, 0.7152, 0.0722));
         float lift = wat * smoothstep(0.060, 0.008, dl);
-        day = mix(day, vec3(0.042, 0.098, 0.190), lift * 0.22);
+        day = mix(day, vec3(0.022, 0.055, 0.120), lift * 0.72);
       }
       /* seasons: real daily snow cover (MODIS) whitens the land it truly covers */
       if(uHasSnow > 0.5){
@@ -530,7 +530,7 @@ const earthMat = new THREE.ShaderMaterial({
       float lk = uLook;
       float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
       if(lk < 3.5){
-        col = mix(vec3(l0), col, 1.24);            /* winner saturation */
+        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));   /* winner saturation, eased in shadows */
         float base = 0.0;
         if(abs(lk-1.0)<0.5) base=0.35;
         else if(abs(lk-2.0)<0.5) base=0.65;
@@ -539,9 +539,9 @@ const earthMat = new THREE.ShaderMaterial({
         col = pow(col, vec3(1.0 + 0.10*k));         /* darker mids */
         col *= (1.0 - 0.10*k);                      /* overall dim */
         float l1 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-        col = mix(vec3(l1), col, 1.0 + 0.14*k);     /* denser colour */
+        col = mix(vec3(l1), col, 1.0 + 0.14*k*smoothstep(0.02, 0.20, l1));   /* denser colour, shadow-safe */
       } else if(abs(lk-4.0)<0.5){
-        col = mix(vec3(l0), col, 1.24);             /* winner, no polarize */
+        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));    /* winner, no polarize */
       }
       col = aces(col);
       float lumi = dot(col, vec3(0.2126, 0.7152, 0.0722));
