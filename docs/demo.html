@@ -335,18 +335,15 @@ const URLS = {
   const gibsWorld=(layer)=> 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
     '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=&FORMAT=image/jpeg' +
     '&BBOX=-180,-90,180,90&LAYERS=' + layer + '&WIDTH=4096&HEIGHT=2048';
-  /* night: a full-disk view resolves ~6px/deg; 4K (11px/deg) is already 2x
-     oversampled, and the close-up gets its lights from the regional tier */
-  URLS.night = [gibsWorld('VIIRS_Black_Marble'),
-                'https://unpkg.com/three-globe/example/img/earth-night.jpg',
-                'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'];
   if(CFG.mode === 'closeup'){
-    /* global day barely shows behind the NASA tiers: 4K is plenty */
-    URLS.day = [gibsWorld('BlueMarble_NextGeneration')].concat(URLS.day.slice(1));
-  } else {
-    /* full/locked: disk cannot resolve 8K clouds; 4K first, saves ~130MB */
-    URLS.cloudsLive = URLS.cloudsLive.slice(1).concat(URLS.cloudsLive[0]);
+    /* close-up: the NASA regional tiers carry the detail, so the global maps
+       drop to 4K and free VRAM for the tiers + 8K clouds */
+    URLS.day   = [gibsWorld('BlueMarble_NextGeneration')].concat(URLS.day.slice(1));
+    URLS.night = [gibsWorld('VIIRS_Black_Marble'),
+                  'https://unpkg.com/three-globe/example/img/earth-night.jpg',
+                  'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'];
   }
+  /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 let liveClouds = false;
 function liveCloudURLs(){  // cache-bust once per update window so new satellite data comes through
@@ -459,7 +456,7 @@ const earthMat = new THREE.ShaderMaterial({
         float wat = texture2D(waterMap, vUv).r;
         float dl  = dot(day, vec3(0.2126, 0.7152, 0.0722));
         float lift = wat * smoothstep(0.060, 0.008, dl);
-        day = mix(day, vec3(0.030, 0.078, 0.168), lift * 0.60);
+        day = mix(day, vec3(0.042, 0.098, 0.190), lift * 0.72);
       }
       /* seasons: real daily snow cover (MODIS) whitens the land it truly covers */
       if(uHasSnow > 0.5){
@@ -491,7 +488,7 @@ const earthMat = new THREE.ShaderMaterial({
           vUv.x - uCloudShift - arc*dot(st/stl, east)/(6.28319*cosLat),
           vUv.y - arc*dot(st/stl, north)/3.14159);
         vec4 ct = texture2D(cloudMap, suv);
-        float csh = smoothstep(0.12, 0.80, ct.r*ct.a);
+        float csh = clamp((ct.r*ct.a - 0.10) * 1.11, 0.0, 1.0);
         col *= 1.0 - csh * 0.45 * dmix;
       }
       /* warm band along the terminator */
@@ -560,7 +557,7 @@ const cloudMat = new THREE.ShaderMaterial({
          planet that washes out land colour. Gate it: below ~12% coverage renders
          nothing, real cloud decks keep their full presence. */
       float aRaw = t.r * t.a;
-      float a = pow(smoothstep(0.12, 0.80, aRaw), 0.90);
+      float a = pow(clamp((aRaw - 0.10) * 1.11, 0.0, 1.0), 0.85);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
       float poleFade = smoothstep(0.985, 0.93, abs(n.y));
