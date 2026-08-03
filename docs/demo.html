@@ -491,7 +491,8 @@ const earthMat = new THREE.ShaderMaterial({
           vUv.x - uCloudShift - arc*dot(st/stl, east)/(6.28319*cosLat),
           vUv.y - arc*dot(st/stl, north)/3.14159);
         vec4 ct = texture2D(cloudMap, suv);
-        col *= 1.0 - (ct.r*ct.a) * 0.45 * dmix;
+        float csh = smoothstep(0.12, 0.80, ct.r*ct.a);
+        col *= 1.0 - csh * 0.45 * dmix;
       }
       /* warm band along the terminator */
       float tw = smoothstep(-0.05, 0.03, ca) * (1.0 - smoothstep(0.03, 0.30, ca));
@@ -555,7 +556,11 @@ const cloudMat = new THREE.ShaderMaterial({
       float l  = max(dot(n, sunDir), 0.0);
       float dm = smoothstep(-0.12, 0.15, dot(n, sunDir));   // day fraction
       vec4 t = texture2D(map, vUv);
-      float a = pow(t.r * t.a, 0.85);
+      /* the satellite map carries a thin near-transparent haze over most of the
+         planet that washes out land colour. Gate it: below ~12% coverage renders
+         nothing, real cloud decks keep their full presence. */
+      float aRaw = t.r * t.a;
+      float a = pow(smoothstep(0.12, 0.80, aRaw), 0.90);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
       float poleFade = smoothstep(0.985, 0.93, abs(n.y));
