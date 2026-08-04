@@ -269,9 +269,18 @@ function magToSize(m){ return Math.max(1.0, 7.0*Math.pow(10, -0.115*m)); }
 /* ===================== RENDERER / SCENE ===================== */
 let renderer;
 try{
-  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance', logarithmicDepthBuffer:true });
+  /* device-aware quality: cap the framebuffer at ~9.5MP so older GPUs
+     (1440p phones like the S10) render at a sane internal resolution.
+     MSAA only when the pixel ratio is low enough for it to be visible;
+     logarithmic depth only in close-up where it is actually needed. */
+  var _pr = Math.min(window.devicePixelRatio || 1, 3);
+  var _px = window.innerWidth * window.innerHeight * _pr * _pr;
+  if(_px > 9.5e6) _pr = Math.max(1, Math.sqrt(9.5e6 / (window.innerWidth * window.innerHeight)));
+  renderer = new THREE.WebGLRenderer({ antialias:(_pr < 2.2), alpha:false,
+    powerPreference:'high-performance',
+    logarithmicDepthBuffer:(CFG.mode === 'closeup') });
 }catch(e){ document.getElementById('err').style.display='flex'; throw e; }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 3));
+renderer.setPixelRatio(_pr);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 document.body.appendChild(renderer.domElement);
@@ -517,6 +526,9 @@ const earthMat = new THREE.ShaderMaterial({
       col = mix(col, vec3(0.40, 0.58, 0.95) * (0.95*dmix + 0.02), haze * 0.32);
       /* bright inner rim - whiter, like the real atmosphere */
       col += vec3(0.55, 0.75, 1.05) * pow(1.0 - mu, 4.5) * (0.7*dmix + 0.03);
+      /* where day meets night the limb burns gold-red: the orbital sunset ring */
+      float sunset = smoothstep(0.28, 0.03, abs(ca));
+      col += vec3(1.00, 0.42, 0.16) * pow(1.0 - mu, 3.2) * sunset * 0.50;
       /* airglow: the faint green oxygen emission rim on the night limb */
       col += vec3(0.10, 0.34, 0.20) * pow(1.0 - mu, 5.0) * (1.0 - dmix) * 0.40;
       /* moonlight: the night side is faintly lit blue-grey by the real Moon,
@@ -942,13 +954,21 @@ try{
     flashes.push({sp, life:0, dur:0.25, amp:1});
   }
 }catch(e){}
+let _stormLast=null, _stormLastT=0;
 function spawnFlash(gm, sd){
   if(!stormCells) return;
   const fl=flashes.find(o=>o.life<=0); if(!fl) return;
-  const r=Math.random()*stormTotW;
-  let lo=0, hi=stormCells.length-1;
-  while(lo<hi){ const mid=(lo+hi)>>1; if(stormCells[mid][2]<r) lo=mid+1; else hi=mid; }
-  const c=stormCells[lo];
+  let c;
+  const nowT=performance.now();
+  if(_stormLast && (nowT-_stormLastT)<2600 && Math.random()<0.55){
+    c=_stormLast;   /* burst: same storm cell flashes again */
+  } else {
+    const r=Math.random()*stormTotW;
+    let lo=0, hi=stormCells.length-1;
+    while(lo<hi){ const mid=(lo+hi)>>1; if(stormCells[mid][2]<r) lo=mid+1; else hi=mid; }
+    c=stormCells[lo];
+  }
+  _stormLast=c; _stormLastT=nowT;
   const lat=c[1]+(Math.random()-0.5)*2.0, lon=c[0]+(Math.random()-0.5)*2.0;
   const wd=locationDir(lat,lon,gm);
   if(wd[0]*sd[0]+wd[1]*sd[1]+wd[2]*sd[2] > -0.05) return;   /* invisible by day */
@@ -1415,8 +1435,12 @@ function update(){
   }
 }
 
+let _lastFrame = 0;
 function animate(){
   requestAnimationFrame(animate);
+  const _n = performance.now();
+  if(_n - _lastFrame < 31) return;    /* 30fps cap: nothing here moves faster */
+  _lastFrame = _n;
   update();
   renderer.render(scene, camera);
 }
