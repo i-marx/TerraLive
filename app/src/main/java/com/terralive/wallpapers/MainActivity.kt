@@ -8,7 +8,11 @@ import android.widget.Toast
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.graphics.Typeface
+import android.os.Build
+import android.webkit.WebView
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.View
@@ -68,6 +72,21 @@ class MainActivity : AppCompatActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        /* menu v3: the real wallpaper breathes behind frosted glass */
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        val bg = findViewById<WebView>(R.id.bgEarth)
+        bg.setBackgroundColor(Color.BLACK)
+        bg.settings.javaScriptEnabled = true
+        bg.settings.allowFileAccess = true
+        bg.loadUrl("file:///android_asset/wallpapers/earth/index.html?look=3&motion=0")
+        if (Build.VERSION.SDK_INT >= 31) {
+            bg.setRenderEffect(RenderEffect.createBlurEffect(55f, 55f, Shader.TileMode.CLAMP))
+        } else {
+            findViewById<View>(R.id.bgScrim).setBackgroundColor(Color.parseColor("#E0030507"))
+        }
+
         listView = findViewById(R.id.wallpaperList)
         renderList()
 
@@ -84,6 +103,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    override fun onPause() { super.onPause(); findViewById<WebView>(R.id.bgEarth)?.onPause() }
+    override fun onResume() { super.onResume(); findViewById<WebView>(R.id.bgEarth)?.onResume() }
 
     private fun dp(v: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics).toInt()
@@ -182,6 +204,68 @@ class MainActivity : AppCompatActivity() {
             card.addView(inner)
             listView.addView(card)
         }
+
+        /* MOTION: parallax toggle */
+        listView.addView(TextView(this).apply {
+            text = "MOTION"
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
+            textSize = 10f
+            letterSpacing = 0.34f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(dp(6f), dp(16f), 0, dp(8f))
+        })
+        val motionOn = Wallpapers.prefs(this).getBoolean(Wallpapers.KEY_MOTION, true)
+        val mCard = MaterialCardView(this).apply {
+            radius = dp(20f).toFloat()
+            setCardBackgroundColor(ContextCompat.getColor(this@MainActivity,
+                if (motionOn) R.color.aero_glass_hi else R.color.aero_glass))
+            strokeWidth = dp(1f)
+            strokeColor = ContextCompat.getColor(this@MainActivity,
+                if (motionOn) R.color.aero_stroke_hi else R.color.aero_stroke)
+            cardElevation = 0f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8f) }
+            setOnClickListener {
+                Wallpapers.prefs(this@MainActivity).edit()
+                    .putBoolean(Wallpapers.KEY_MOTION, !motionOn).apply()
+                renderList()
+            }
+        }
+        val mRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(20f), dp(14f), dp(20f), dp(14f))
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val mCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        mCol.addView(TextView(this).apply {
+            text = "Parallax on tilt"
+            setTextColor(ContextCompat.getColor(this@MainActivity,
+                if (motionOn) R.color.aero_ice else R.color.aero_text))
+            textSize = 15f
+            letterSpacing = 0.04f
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        })
+        mCol.addView(TextView(this).apply {
+            text = "The planet shifts subtly as you move your phone"
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.terra_grey))
+            textSize = 12f
+            setPadding(0, dp(2f), 0, 0)
+        })
+        mRow.addView(mCol)
+        mRow.addView(TextView(this).apply {
+            text = if (motionOn) "ON" else "OFF"
+            setTextColor(ContextCompat.getColor(this@MainActivity,
+                if (motionOn) R.color.aero_ice else R.color.terra_grey_dim))
+            textSize = 13f
+            letterSpacing = 0.20f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        })
+        mCard.addView(mRow)
+        listView.addView(mCard)
 
         /* teaser for the upcoming collection */
         listView.addView(TextView(this).apply {
