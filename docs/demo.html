@@ -82,6 +82,8 @@ const CFG = {
     ovr('fov',      v=>CFG.cuFov=v);
     CFG.look = 3;   /* Marx's pick: maximum polarizer */
     if(q.has('look')){ const lv=parseFloat(q.get('look')); if(isFinite(lv)) CFG.look = lv; }
+    CFG.motion = 1;
+    if(q.has('motion')) CFG.motion = (q.get('motion')==='0'||q.get('motion')==='false') ? 0 : 1;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
@@ -97,6 +99,26 @@ const CFG = {
     }
   }catch(e){}
 })();
+
+/* ---- motion parallax: device tilt shifts the camera slightly (3D depth).
+   Fed natively by the app at ~16Hz; deviceorientation is the browser fallback. ---- */
+let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0;
+window._terraTilt = function(x, y){
+  _tiltNative = Date.now();
+  if(isFinite(x) && isFinite(y)){
+    _ptx = Math.max(-1, Math.min(1, x));
+    _pty = Math.max(-1, Math.min(1, y));
+  }
+};
+try{
+  window.addEventListener('deviceorientation', function(e){
+    if(!CFG.motion) return;
+    if(Date.now() - _tiltNative < 2000) return;   /* native sensor feed wins */
+    if(e.gamma == null || e.beta == null) return;
+    _ptx = Math.max(-1, Math.min(1, e.gamma/28));
+    _pty = Math.max(-1, Math.min(1, (e.beta - 40)/28));
+  });
+}catch(e){}
 
 /* surface point (lat,lon) -> scene-frame direction, matching the globe texture
    mapping and the current Earth spin (gm = GMST in radians). */
@@ -1138,6 +1160,7 @@ let _lastMs=0;
 function updateExtras(gm, sd, mdU, illum){
   const now=performance.now();
   const dt=Math.min(0.1, _lastMs? (now-_lastMs)/1000 : 0.016); _lastMs=now;
+  if(CFG.motion){ _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5); }
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
@@ -1358,6 +1381,16 @@ layout();
 const _v = new THREE.Vector3();
 function setFromArr(vec, a){ vec.set(a[0], a[1], a[2]); return vec; }
 
+function applyParallax(amp){
+  if(!CFG.motion) return;
+  const p = camera.position;
+  const r = new THREE.Vector3().crossVectors(camera.up, p).normalize();
+  const uu = new THREE.Vector3().crossVectors(p, r).normalize();
+  const L = p.length();
+  p.addScaledVector(r, _pjx*amp*L).addScaledVector(uu, -_pjy*amp*L);
+  p.setLength(L);
+}
+
 function update(){
   const n = jdNow() - 2451545.0;
 
@@ -1420,6 +1453,7 @@ function update(){
     right = right.multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll));
     up = new THREE.Vector3().crossVectors(right, fwd);
     camera.up.copy(up);
+    if(CFG.motion){ camera.position.addScaledVector(right, _pjx*0.010).addScaledVector(up, _pjy*0.010); }
     camera.lookAt(camera.position.x + fwd.x, camera.position.y + fwd.y, camera.position.z + fwd.z);
   } else if(CFG.mode === 'locked'){
     /* Camera locked over the user's location, full disk centred: co-rotates with
@@ -1427,6 +1461,7 @@ function update(){
     const ldir = locationDir(CFG.userLat, CFG.userLon, gm);
     camera.position.set(ldir[0]*camDist, ldir[1]*camDist, ldir[2]*camDist);
     setFromArr(camera.up, eclNorthArr(n));
+    applyParallax(0.025);
     camera.lookAt(0,0,0);
     camera.rotateZ(CFG.lockedRoll * D2R);   // turn the map upright
   } else {
@@ -1441,6 +1476,7 @@ function update(){
     const cd = eclToArr(s.lam - alpha, 0, n);
     camera.position.set(cd[0]*cD, cd[1]*cD, cd[2]*cD);
     setFromArr(camera.up, eclNorthArr(n));
+    applyParallax(0.030);
     camera.lookAt(0,0,0);
   }
 }
