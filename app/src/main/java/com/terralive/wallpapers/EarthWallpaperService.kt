@@ -4,6 +4,10 @@ import android.app.Presentation
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.service.wallpaper.WallpaperService
@@ -20,9 +24,37 @@ class EarthWallpaperService : WallpaperService() {
         private var presentation: Presentation? = null
         private var webView: WebView? = null
 
+        /* ---- motion parallax: accelerometer -> JS at UI rate, only while visible ---- */
+        private var sensorManager: SensorManager? = null
+        private var sensorOn = false
+        private val tiltListener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                val wv = webView ?: return
+                val x = (-e.values[0] / 4.5f).coerceIn(-1f, 1f)
+                val y = ((e.values[1] - 7f) / 4.5f).coerceIn(-1f, 1f)
+                wv.evaluateJavascript("window._terraTilt&&_terraTilt($x,$y)", null)
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        private fun startTilt() {
+            if (sensorOn) return
+            if (!Wallpapers.motion(this@EarthWallpaperService)) return
+            val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+            sensorManager = sm
+            val acc = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+            sm.registerListener(tiltListener, acc, SensorManager.SENSOR_DELAY_UI)
+            sensorOn = true
+        }
+        private fun stopTilt() {
+            if (!sensorOn) return
+            sensorManager?.unregisterListener(tiltListener)
+            sensorOn = false
+        }
+
         /* hot-swap the scene when the user picks another wallpaper in the app */
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK) {
+            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION) {
+                if (key == Wallpapers.KEY_MOTION) { stopTilt(); startTilt() }
                 webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             }
         }
@@ -58,8 +90,8 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible) { webView?.onResume(); webView?.resumeTimers() }
-            else { webView?.onPause(); webView?.pauseTimers() }
+            if (visible) { webView?.onResume(); webView?.resumeTimers(); startTilt() }
+            else { stopTilt(); webView?.onPause(); webView?.pauseTimers() }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
@@ -74,6 +106,7 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         private fun release() {
+            stopTilt()
             presentation?.dismiss(); presentation = null
             virtualDisplay?.release(); virtualDisplay = null
             webView?.destroy(); webView = null
