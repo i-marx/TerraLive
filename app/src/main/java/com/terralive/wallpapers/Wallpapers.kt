@@ -18,6 +18,7 @@ object Wallpapers {
     const val KEY_LAT = "user_lat"           // Float
     const val KEY_LON = "user_lon"           // Float
     const val KEY_LOOK = "look_variant"      // Int 0..5 (testing)
+    const val KEY_MOTION = "motion_parallax"  // Boolean, default true
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
@@ -43,13 +44,17 @@ object Wallpapers {
         if (id != "earth") return base
         val p = prefs(ctx)
         val mode = p.getString(KEY_MODE, "full") ?: "full"
-        if (mode == "full") { val lk = p.getInt(KEY_LOOK, 3); return if (lk > 0) "$base?look=$lk" else base }
+        val look = p.getInt(KEY_LOOK, 3)
+        val mot = if (p.getBoolean(KEY_MOTION, true)) 1 else 0
         val lat = p.getFloat(KEY_LAT, Float.NaN)
         val lon = p.getFloat(KEY_LON, Float.NaN)
-        val look = p.getInt(KEY_LOOK, 3)
-        if (lat.isNaN() || lon.isNaN()) return if (look > 0) "$base?look=$look" else base
-        return "$base?mode=$mode&lat=$lat&lon=$lon&look=$look"
+        val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot)
+        if (mode != "full" && !lat.isNaN() && !lon.isNaN())
+            qs.append("&mode=").append(mode).append("&lat=").append(lat).append("&lon=").append(lon)
+        return base + qs.toString()
     }
+
+    fun motion(ctx: Context) = prefs(ctx).getBoolean(KEY_MOTION, true)
 
     fun viewMode(ctx: Context) = prefs(ctx).getString(KEY_MODE, "full") ?: "full"
 
