@@ -523,12 +523,13 @@ const earthMat = new THREE.ShaderMaterial({
         float stl = length(st) + 1e-5;
         float arc = 0.012 * clamp(stl/max(ca, 0.25), 0.0, 3.0);
         float cosLat = max(sqrt(1.0 - n.y*n.y), 0.2);
-        vec2 suv = vec2(
-          vUv.x - uCloudShift - arc*dot(st/stl, east)/(6.28319*cosLat),
-          vUv.y - arc*dot(st/stl, north)/3.14159);
+        float sdx = clamp(arc*dot(st/stl, east)/(6.28319*cosLat), -0.005, 0.005);
+        float sdy = clamp(arc*dot(st/stl, north)/3.14159, -0.005, 0.005);
+        vec2 suv = vec2(vUv.x - uCloudShift - sdx, vUv.y - sdy);
         vec4 ct = texture2D(cloudMap, suv);
         float csh = clamp((ct.r*ct.a - 0.10) * 1.11, 0.0, 1.0);
-        col *= 1.0 - csh * 0.45 * dmix;
+        float latFade = smoothstep(0.20, 0.40, cosLat);
+        col *= 1.0 - csh * 0.45 * dmix * latFade;
       }
       /* warm band along the terminator */
       float tw = smoothstep(-0.05, 0.03, ca) * (1.0 - smoothstep(0.03, 0.30, ca));
@@ -1490,6 +1491,16 @@ function animate(){
   update();
   renderer.render(scene, camera);
 }
+/* brighter night sky: lift every star field (incl. Milky Way band + glow) */
+try{
+  setTimeout(function(){
+    try{
+      scene.traverse(function(o){
+        if(o.isPoints && o.material && o.material.color){ o.material.color.setRGB(1.5, 1.5, 1.5); }
+      });
+    }catch(e){}
+  }, 12000);
+}catch(e){}
 animate();
 
 /* keep it a wallpaper: no interaction at all */
