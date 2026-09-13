@@ -84,6 +84,8 @@ const CFG = {
     if(q.has('look')){ const lv=parseFloat(q.get('look')); if(isFinite(lv)) CFG.look = lv; }
     CFG.motion = 1;
     if(q.has('motion')) CFG.motion = (q.get('motion')==='0'||q.get('motion')==='false') ? 0 : 1;
+    CFG.glint = 0;
+    if(q.has('glint')) CFG.glint = q.get('glint')==='1' ? 1 : 0;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
@@ -418,6 +420,9 @@ const earthUniforms = {
   snowMap : { value: flatTex('#000000') },
   uHasSnow: { value: 0.0 },
   uLook   : { value: 0.0 },
+  iceMap  : { value: flatTex('#000000') },
+  uHasIce : { value: 0.0 },
+  uGlint  : { value: 0.0 },
   uMoonAmt: { value: 0.0 },
   uHasClouds:{ value: 0.0 },
   uCloudShift:{ value: 0.0 },
@@ -446,6 +451,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform vec3 uMoonDir; uniform float uMoonAmt;
     uniform sampler2D snowMap; uniform float uHasSnow;
     uniform float uLook;
+    uniform sampler2D iceMap; uniform float uHasIce; uniform float uGlint;
     varying vec3 vN; varying vec3 vWP; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     float hash21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -503,6 +509,12 @@ const earthMat = new THREE.ShaderMaterial({
         float wat2 = (uHasWater > 0.5) ? texture2D(waterMap, vUv).r : 0.0;
         day = mix(day, vec3(0.60, 0.66, 0.75), sn * (1.0 - wat2*0.85) * 0.85);
       }
+      /* seasons at sea: real AMSR2 sea-ice concentration frosts the ocean */
+      if(uHasIce > 0.5 && uHasWater > 0.5){
+        float ic = texture2D(iceMap, vUv).r;
+        float watI = texture2D(waterMap, vUv).r;
+        day = mix(day, vec3(0.70, 0.76, 0.84), ic * watI * 0.88);
+      }
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
       /* close-up only: fine terrain grain locked to the surface, breaks up
@@ -530,6 +542,14 @@ const earthMat = new THREE.ShaderMaterial({
         float csh = clamp((ct.r*ct.a - 0.10) * 1.11, 0.0, 1.0);
         float latFade = smoothstep(0.20, 0.40, cosLat);
         col *= 1.0 - csh * 0.45 * dmix * latFade;
+      }
+      /* ocean sun glint (opt-in): rough-sea sheen + tighter specular core */
+      if(uGlint > 0.5 && uHasWater > 0.5){
+        float watG = texture2D(waterMap, vUv).r;
+        vec3 rfl = reflect(-sunDir, n);
+        float spec = max(dot(rfl, vd), 0.0);
+        float glint = pow(spec, 22.0)*0.30 + pow(spec, 160.0)*0.55;
+        col += vec3(1.0, 0.93, 0.80) * glint * watG * dmix * 1.4;
       }
       /* warm band along the terminator */
       float tw = smoothstep(-0.05, 0.03, ca) * (1.0 - smoothstep(0.03, 0.30, ca));
@@ -1133,6 +1153,76 @@ try{
   }
 }catch(e){}
 
+/* ---- EARTHQUAKES: USGS M4.5+ of the last day as amber pulse rings ---- */
+const quakes=[];
+try{
+  const rt=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=64;
+    const cx=cv.getContext('2d');
+    cx.strokeStyle='rgba(255,255,255,1)'; cx.lineWidth=5;
+    cx.beginPath(); cx.arc(32,32,22,0,6.2832); cx.stroke();
+    cx.strokeStyle='rgba(255,255,255,0.35)'; cx.lineWidth=11;
+    cx.beginPath(); cx.arc(32,32,22,0,6.2832); cx.stroke();
+    return new THREE.CanvasTexture(cv); })();
+  const fetchQuakes=()=>{
+    fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson')
+      .then(r=>r.json()).then(j=>{
+        try{
+          if(!j || !Array.isArray(j.features)) return;
+          for(const q of quakes){ try{ earth.remove(q.sp); }catch(e){} }
+          quakes.length=0;
+          let n=0;
+          for(const ft of j.features){
+            if(++n>30) break;
+            const c=ft.geometry && ft.geometry.coordinates; if(!c) continue;
+            const mag=ft.properties.mag||4.5;
+            const m=new THREE.SpriteMaterial({ map:rt, transparent:true, depthWrite:false,
+              blending:THREE.AdditiveBlending, color:new THREE.Color(1.0,0.42,0.22), opacity:0 });
+            const sp=new THREE.Sprite(m);
+            const d=localDir(c[1], c[0]); sp.position.set(d.x*1.005, d.y*1.005, d.z*1.005);
+            earth.add(sp);
+            quakes.push({sp, lat:c[1], lon:c[0], mag:mag, t0:ft.properties.time||Date.now(), ph:Math.random()});
+          }
+        }catch(e){}
+      }).catch(()=>{});
+  };
+  fetchQuakes(); setInterval(fetchQuakes, 15*60*1000);
+}catch(e){}
+
+/* ---- SEA ICE: real AMSR2 concentration, refreshed twice a day ---- */
+try{
+  const fetchIce=()=>{
+    const im=new Image(); im.crossOrigin='anonymous';
+    im.onload=()=>{
+      try{
+        const W=4096, H=2048;
+        const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+        const cx=cv.getContext('2d');
+        const dx=Math.round((CFG.lonOffset/360)*W);
+        cx.drawImage(im, dx, 0, W, H);
+        if(dx!==0){ cx.drawImage(im, dx>0? dx-W : dx+W, 0, W, H); }
+        const d=cx.getImageData(0,0,W,H); const p=d.data;
+        for(let i=0;i<p.length;i+=4){
+          const v=(p[i+3]>15) ? Math.min(255, 70 + (p[i]+p[i+1]+p[i+2])/2) : 0;
+          p[i]=p[i+1]=p[i+2]=v; p[i+3]=255;
+        }
+        cx.putImageData(d,0,0);
+        const t=new THREE.CanvasTexture(cv);
+        t.wrapS=THREE.RepeatWrapping;
+        t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+        t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+        t.generateMipmaps=true;
+        earthUniforms.iceMap.value=t; earthUniforms.uHasIce.value=1.0;
+      }catch(e){}
+    };
+    im.onerror=()=>{};
+    im.src='https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'+
+      '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES='+
+      '&FORMAT=image/png&TRANSPARENT=TRUE&WIDTH=4096&HEIGHT=2048'+
+      '&BBOX=-180,-90,180,90&LAYERS=AMSRU2_Sea_Ice_Concentration_12km';
+  };
+  fetchIce(); setInterval(fetchIce, 12*60*60*1000);
+}catch(e){}
+
 /* ---- METEORS: rare streaks, rate driven by the real shower calendar ---- */
 let meteor=null;
 try{
@@ -1161,11 +1251,16 @@ let _lastMs=0;
 function updateExtras(gm, sd, mdU, illum){
   const now=performance.now();
   const dt=Math.min(0.1, _lastMs? (now-_lastMs)/1000 : 0.016); _lastMs=now;
-  if(CFG.motion){ _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5); }
+  if(CFG.motion){
+    const _dv = Math.abs(_ptx-_pjx) + Math.abs(_pty-_pjy);
+    if(_dv > 0.02) _tiltMove = now;
+    _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5);
+  }
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
   earthUniforms.uLook.value=CFG.look||0;
+  earthUniforms.uGlint.value=CFG.glint||0;
   /* the Sun at its true place in the sky */
   if(sunCore){
     const R=CFG.starSphereR*0.94;
@@ -1203,6 +1298,16 @@ function updateExtras(gm, sd, mdU, illum){
     const dn=wd[0]*sd[0]+wd[1]*sd[1]+wd[2]*sd[2];
     const nightF=Math.min(1, Math.max(0, (-dn-0.02)/0.12));
     em.sp.material.opacity = em.base*nightF*(0.80+0.25*Math.sin(tsec*2.6+em.ph));
+  }
+  /* earthquake pulses: fresh events ring strongly, fading over ~36h */
+  for(const q of quakes){
+    const ph=(tsec*0.45 + q.ph) % 1.0;
+    const age=(Date.now()-q.t0)/3600000;
+    const ageF=Math.max(0.12, Math.min(1, 1 - age/36));
+    const base=0.012 + Math.max(0, q.mag-4.5)*0.006;
+    const sc=base*(0.55 + ph*1.25);
+    q.sp.scale.set(sc, sc, 1);
+    q.sp.material.opacity=(0.5 + Math.min(0.4,(q.mag-4.5)*0.13))*(1-ph)*ageF;
   }
   /* meteors */
   if(meteor){
@@ -1482,11 +1587,12 @@ function update(){
   }
 }
 
-let _lastFrame = 0;
+let _lastFrame = 0, _tiltMove = 0;
 function animate(){
   requestAnimationFrame(animate);
   const _n = performance.now();
-  if(_n - _lastFrame < 31) return;    /* 30fps cap: nothing here moves faster */
+  const _iv = (CFG.motion && (_n - _tiltMove) < 800) ? 16 : 31;   /* 60fps while tilting */
+  if(_n - _lastFrame < _iv) return;
   _lastFrame = _n;
   update();
   renderer.render(scene, camera);
