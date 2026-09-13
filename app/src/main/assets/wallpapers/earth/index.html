@@ -1453,7 +1453,7 @@ function update(){
     right = right.multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll));
     up = new THREE.Vector3().crossVectors(right, fwd);
     camera.up.copy(up);
-    if(CFG.motion){ camera.position.addScaledVector(right, _pjx*0.010).addScaledVector(up, _pjy*0.010); }
+    if(CFG.motion){ camera.position.addScaledVector(right, _pjx*0.026).addScaledVector(up, _pjy*0.026); }
     camera.lookAt(camera.position.x + fwd.x, camera.position.y + fwd.y, camera.position.z + fwd.z);
   } else if(CFG.mode === 'locked'){
     /* Camera locked over the user's location, full disk centred: co-rotates with
@@ -1461,7 +1461,7 @@ function update(){
     const ldir = locationDir(CFG.userLat, CFG.userLon, gm);
     camera.position.set(ldir[0]*camDist, ldir[1]*camDist, ldir[2]*camDist);
     setFromArr(camera.up, eclNorthArr(n));
-    applyParallax(0.025);
+    applyParallax(0.060);
     camera.lookAt(0,0,0);
     camera.rotateZ(CFG.lockedRoll * D2R);   // turn the map upright
   } else {
@@ -1476,7 +1476,7 @@ function update(){
     const cd = eclToArr(s.lam - alpha, 0, n);
     camera.position.set(cd[0]*cD, cd[1]*cD, cd[2]*cD);
     setFromArr(camera.up, eclNorthArr(n));
-    applyParallax(0.030);
+    applyParallax(0.075);
     camera.lookAt(0,0,0);
   }
 }
