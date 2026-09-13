@@ -477,7 +477,7 @@ const earthMat = new THREE.ShaderMaterial({
       vec2 rr = vec2((fract(vUv.x - uReg.x + 0.5) - 0.5) / max(uReg.z, 1e-4),
                      (vUv.y - uReg.y) / max(uReg.w, 1e-4));
       vec2 ruv = clamp(rr*0.5 + 0.5, 0.0, 1.0);
-      float rin = 1.0 - smoothstep(0.88, 0.985, max(abs(rr.x), abs(rr.y)));
+      float rin = 1.0 - smoothstep(0.72, 0.995, max(abs(rr.x), abs(rr.y)));
       vec2 rr2 = vec2((fract(vUv.x - uRegO.x + 0.5) - 0.5) / max(uRegO.z, 1e-4),
                       (vUv.y - uRegO.y) / max(uRegO.w, 1e-4));
       vec2 ruv2 = clamp(rr2*0.5 + 0.5, 0.0, 1.0);
@@ -513,7 +513,7 @@ const earthMat = new THREE.ShaderMaterial({
       if(uHasIce > 0.5 && uHasWater > 0.5){
         float ic = texture2D(iceMap, vUv).r;
         float watI = texture2D(waterMap, vUv).r;
-        day = mix(day, vec3(0.70, 0.76, 0.84), ic * watI * 0.88);
+        day = mix(day, vec3(0.62, 0.68, 0.77), ic * watI * 0.70);
       }
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
@@ -564,8 +564,8 @@ const earthMat = new THREE.ShaderMaterial({
       vec3 rgN = pow(texture2D(regNight, ruv, 0.4).rgb, vec3(2.2));
       vec3 rgG = pow(texture2D(regNight, ruv, 2.2).rgb, vec3(2.2));
       nSharp = mix(nSharp, rgN + rgG*0.6, rN);
-      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) * (1.0 - 0.55*rN)
-                  + nSharp * (0.22 + 0.85*rN);
+      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) * (1.0 - 0.26*rN)
+                  + nSharp * (0.22 + 0.48*rN);
       col += lights * vec3(1.0, 0.80, 0.52) * (1.0 - dmix) * 2.1 * uHasNight;
       /* atmospheric scattering: soft haze thickening toward the limb */
       float mu = max(dot(nGeo, vd), 0.0);
@@ -1156,12 +1156,17 @@ try{
 /* ---- EARTHQUAKES: USGS M4.5+ of the last day as amber pulse rings ---- */
 const quakes=[];
 try{
-  const rt=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=64;
+  const rt=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=128;
     const cx=cv.getContext('2d');
-    cx.strokeStyle='rgba(255,255,255,1)'; cx.lineWidth=5;
-    cx.beginPath(); cx.arc(32,32,22,0,6.2832); cx.stroke();
-    cx.strokeStyle='rgba(255,255,255,0.35)'; cx.lineWidth=11;
-    cx.beginPath(); cx.arc(32,32,22,0,6.2832); cx.stroke();
+    try{ cx.filter='blur(3px)'; }catch(e){}
+    cx.strokeStyle='rgba(255,255,255,0.9)'; cx.lineWidth=6;
+    cx.beginPath(); cx.arc(64,64,44,0,6.2832); cx.stroke();
+    cx.strokeStyle='rgba(255,255,255,0.35)'; cx.lineWidth=4;
+    cx.beginPath(); cx.arc(64,64,30,0,6.2832); cx.stroke();
+    try{ cx.filter='none'; }catch(e){}
+    const g=cx.createRadialGradient(64,64,0,64,64,10);
+    g.addColorStop(0,'rgba(255,255,255,0.5)'); g.addColorStop(1,'rgba(255,255,255,0)');
+    cx.fillStyle=g; cx.fillRect(0,0,128,128);
     return new THREE.CanvasTexture(cv); })();
   const fetchQuakes=()=>{
     fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson')
@@ -1194,7 +1199,7 @@ try{
     const im=new Image(); im.crossOrigin='anonymous';
     im.onload=()=>{
       try{
-        const W=4096, H=2048;
+        const W=1024, H=512;
         const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
         const cx=cv.getContext('2d');
         const dx=Math.round((CFG.lonOffset/360)*W);
@@ -1202,10 +1207,15 @@ try{
         if(dx!==0){ cx.drawImage(im, dx>0? dx-W : dx+W, 0, W, H); }
         const d=cx.getImageData(0,0,W,H); const p=d.data;
         for(let i=0;i<p.length;i+=4){
-          const v=(p[i+3]>15) ? Math.min(255, 70 + (p[i]+p[i+1]+p[i+2])/2) : 0;
+          const lum=(p[i]+p[i+1]+p[i+2])/3;
+          const v=(p[i+3]>60) ? Math.max(0, Math.min(255, (lum-90)*2.2)) : 0;
           p[i]=p[i+1]=p[i+2]=v; p[i+3]=255;
         }
         cx.putImageData(d,0,0);
+        const up=document.createElement('canvas'); up.width=2048; up.height=1024;
+        const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(cv,0,0,2048,1024);
+        cv.width=2048; cv.height=1024;
+        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0);
         const t=new THREE.CanvasTexture(cv);
         t.wrapS=THREE.RepeatWrapping;
         t.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -1299,15 +1309,19 @@ function updateExtras(gm, sd, mdU, illum){
     const nightF=Math.min(1, Math.max(0, (-dn-0.02)/0.12));
     em.sp.material.opacity = em.base*nightF*(0.80+0.25*Math.sin(tsec*2.6+em.ph));
   }
-  /* earthquake pulses: fresh events ring strongly, fading over ~36h */
+  /* earthquake ripples: slow soft rings, brighter at night, fading over ~36h */
   for(const q of quakes){
-    const ph=(tsec*0.45 + q.ph) % 1.0;
+    const ph=(tsec*0.22 + q.ph) % 1.0;
+    const e=1 - Math.pow(1-ph, 2.2);
     const age=(Date.now()-q.t0)/3600000;
-    const ageF=Math.max(0.12, Math.min(1, 1 - age/36));
-    const base=0.012 + Math.max(0, q.mag-4.5)*0.006;
-    const sc=base*(0.55 + ph*1.25);
+    const ageF=Math.max(0.10, Math.min(1, 1 - age/36));
+    const wdq=locationDir(q.lat, q.lon, gm);
+    const dnq=wdq[0]*sd[0]+wdq[1]*sd[1]+wdq[2]*sd[2];
+    const dayDim=0.30 + 0.70*Math.min(1, Math.max(0, (-dnq+0.15)/0.4));
+    const base=0.011 + Math.max(0, q.mag-4.5)*0.005;
+    const sc=base*(0.35 + e*1.5);
     q.sp.scale.set(sc, sc, 1);
-    q.sp.material.opacity=(0.5 + Math.min(0.4,(q.mag-4.5)*0.13))*(1-ph)*ageF;
+    q.sp.material.opacity=(0.30 + Math.min(0.25,(q.mag-4.5)*0.09))*(1-e)*ageF*dayDim;
   }
   /* meteors */
   if(meteor){
