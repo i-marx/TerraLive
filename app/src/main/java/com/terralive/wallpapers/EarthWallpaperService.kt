@@ -53,7 +53,7 @@ class EarthWallpaperService : WallpaperService() {
 
         /* hot-swap the scene when the user picks another wallpaper in the app */
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION) {
+            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION || key == Wallpapers.KEY_WAKE) {
                 if (key == Wallpapers.KEY_MOTION) { stopTilt(); startTilt() }
                 webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             }
@@ -90,7 +90,10 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible) { webView?.onResume(); webView?.resumeTimers(); startTilt() }
+            if (visible) {
+                webView?.onResume(); webView?.resumeTimers(); startTilt()
+                webView?.evaluateJavascript("window._terraWake&&_terraWake()", null)
+            }
             else { stopTilt(); webView?.onPause(); webView?.pauseTimers() }
         }
 
