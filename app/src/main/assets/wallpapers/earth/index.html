@@ -652,7 +652,7 @@ const cloudMat = new THREE.ShaderMaterial({
       float a = pow(clamp((aRaw - 0.10) * 1.11, 0.0, 1.0), 0.85);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
-      float poleFade = smoothstep(0.9945, 0.958, abs(n.y));
+      float poleFade = smoothstep(0.9990, 0.9880, abs(n.y));
       a *= poleFade;
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
@@ -910,7 +910,7 @@ function paintAurora(coords){
   const img=gx.createImageData(GW,GH);
   const put=(lon,lat,p)=>{
     /* p = probability 0..100; kill the noise floor, keep real aurora */
-    const v=Math.round(255*Math.pow(Math.min(1, Math.max(0,(p-8)/45)), 0.9));
+    const v=Math.round(255*Math.pow(Math.min(1, Math.max(0,(p-14)/52)), 0.9));
     if(v<=0) return;
     let x=Math.round(lon+CFG.lonOffset+180); x=((x%GW)+GW)%GW;
     let y=Math.round(90-lat); if(y<0)y=0; if(y>GH-1)y=GH-1;
@@ -938,9 +938,9 @@ function paintAurora(coords){
   cx.imageSmoothingEnabled=true;
   cx.drawImage(grid,0,0,W,H);
   /* soften further: down-up resample */
-  const sm=document.createElement('canvas'); sm.width=72; sm.height=36;
+  const sm=document.createElement('canvas'); sm.width=96; sm.height=48;
   const sx=sm.getContext('2d'); sx.imageSmoothingEnabled=true;
-  sx.drawImage(cv,0,0,72,36);
+  sx.drawImage(cv,0,0,96,48);
   cx.clearRect(0,0,W,H); cx.drawImage(sm,0,0,W,H);
   const t=new THREE.CanvasTexture(cv);
   t.wrapS=THREE.RepeatWrapping; t.minFilter=THREE.LinearMipmapLinearFilter;
@@ -1246,6 +1246,23 @@ try{
       '&BBOX=-180,-90,180,90&LAYERS=AMSRU2_Sea_Ice_Concentration_12km';
   };
   fetchIce(); setInterval(fetchIce, 12*60*60*1000);
+}catch(e){}
+
+/* ---- DIVE STARS: volumetric field you fly through during the intro ---- */
+let _diveStars=null;
+try{
+  if(_introP < 1){
+    const N=1600, g2=new THREE.BufferGeometry(), pos2=new Float32Array(N*3);
+    for(let i=0;i<N;i++){
+      const u3=Math.random()*2-1, th3=Math.random()*6.2832, rr3=Math.sqrt(1-u3*u3);
+      const R3=60+Math.pow(Math.random(),1.6)*2400;
+      pos2[i*3]=rr3*Math.cos(th3)*R3; pos2[i*3+1]=u3*R3; pos2[i*3+2]=rr3*Math.sin(th3)*R3;
+    }
+    g2.setAttribute('position', new THREE.BufferAttribute(pos2,3));
+    const m2=new THREE.PointsMaterial({ color:0xcfe2ff, size:2.6, sizeAttenuation:true,
+      transparent:true, opacity:0.85, depthWrite:false, blending:THREE.AdditiveBlending });
+    _diveStars=new THREE.Points(g2, m2); scene.add(_diveStars);
+  }
 }catch(e){}
 
 /* ---- SUN GLARE: soft lens glare when the real Sun is in frame ---- */
@@ -1685,6 +1702,13 @@ function update(){
     if(_introP > 0.9975){
       _introP = 1;
       try{ localStorage.setItem('terraIntroSeen', '1'); }catch(e){}
+    }
+    if(_diveStars){
+      _diveStars.material.opacity = 0.85 * (1 - Math.min(1, Math.max(0, (_introP - 0.70) / 0.25)));
+      if(_introP >= 1){
+        try{ scene.remove(_diveStars); _diveStars.geometry.dispose(); _diveStars.material.dispose(); }catch(e){}
+        _diveStars = null;
+      }
     }
     const eI = _introP;
     const L1 = camera.position.length();
