@@ -1248,6 +1248,14 @@ try{
   fetchIce(); setInterval(fetchIce, 12*60*60*1000);
 }catch(e){}
 
+/* ---- SUN GLARE: soft lens glare when the real Sun is in frame ---- */
+let _glare=null, _glareV=new THREE.Vector3();
+try{
+  _glare=document.createElement('div');
+  _glare.style.cssText='position:fixed;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;z-index:5;';
+  document.body.appendChild(_glare);
+}catch(e){}
+
 /* ---- METEORS: rare streaks, rate driven by the real shower calendar ---- */
 let meteor=null;
 try{
@@ -1337,6 +1345,31 @@ function updateExtras(gm, sd, mdU, illum){
     const sc=base*(0.35 + e*1.5);
     q.sp.scale.set(sc, sc, 1);
     q.sp.material.opacity=(0.30 + Math.min(0.25,(q.mag-4.5)*0.09))*(1-e)*ageF*dayDim;
+  }
+  /* sun glare: blooms at the true screen position of the Sun, occlusion-aware */
+  if(_glare){
+    let op=0, gx=50, gy=50;
+    _glareV.set(sd[0]*2800, sd[1]*2800, sd[2]*2800);
+    const cp=camera.position;
+    const dxg=_glareV.x-cp.x, dyg=_glareV.y-cp.y, dzg=_glareV.z-cp.z;
+    const dlg=Math.sqrt(dxg*dxg+dyg*dyg+dzg*dzg);
+    const tpr=(-cp.x*dxg - cp.y*dyg - cp.z*dzg)/dlg;
+    let occ=false;
+    if(tpr>0 && tpr<dlg){
+      const qx=cp.x+dxg/dlg*tpr, qy=cp.y+dyg/dlg*tpr, qz=cp.z+dzg/dlg*tpr;
+      if(Math.sqrt(qx*qx+qy*qy+qz*qz) < 1.0) occ=true;
+    }
+    if(!occ){
+      _glareV.project(camera);
+      if(_glareV.z < 1){
+        const axg=Math.abs(_glareV.x), ayg=Math.abs(_glareV.y);
+        const inF=Math.max(0, 1.5 - Math.max(axg, ayg))/1.5;
+        op=Math.pow(Math.min(1,inF), 1.6)*0.34;
+        gx=(_glareV.x*0.5+0.5)*100; gy=(-_glareV.y*0.5+0.5)*100;
+      }
+    }
+    _glare.style.opacity=op.toFixed(3);
+    if(op>0.003) _glare.style.background='radial-gradient(circle at '+gx.toFixed(1)+'% '+gy.toFixed(1)+'%, rgba(255,236,200,0.9) 0%, rgba(255,214,160,0.35) 18%, rgba(255,190,120,0.12) 38%, rgba(0,0,0,0) 62%)';
   }
   /* meteors */
   if(meteor){
