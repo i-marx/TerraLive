@@ -84,8 +84,10 @@ const CFG = {
     if(q.has('look')){ const lv=parseFloat(q.get('look')); if(isFinite(lv)) CFG.look = lv; }
     CFG.motion = 1;
     if(q.has('motion')) CFG.motion = (q.get('motion')==='0'||q.get('motion')==='false') ? 0 : 1;
-    CFG.glint = 0;
-    if(q.has('glint')) CFG.glint = q.get('glint')==='1' ? 1 : 0;
+    CFG.wake = 1;
+    if(q.has('wake')) CFG.wake = q.get('wake')==='0' ? 0 : 1;
+    CFG.glint = 1;
+    if(q.has('glint')) CFG.glint = q.get('glint')==='0' ? 0 : 1;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
@@ -104,7 +106,8 @@ const CFG = {
 
 /* ---- motion parallax: device tilt shifts the camera slightly (3D depth).
    Fed natively by the app at ~16Hz; deviceorientation is the browser fallback. ---- */
-let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0;
+let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0, _wakeT=-1;
+window._terraWake = function(){ if(CFG.wake) _wakeT = performance.now(); };
 window._terraTilt = function(x, y){
   _tiltNative = Date.now();
   if(isFinite(x) && isFinite(y)){
@@ -493,7 +496,7 @@ const earthMat = new THREE.ShaderMaterial({
       /* wide tier: same NASA imagery out to +-55deg, covers the visible ground */
       day = mix(day, pow(texture2D(regOut, ruv2, -0.2).rgb, vec3(2.2)), rin2 * uHasRegO);
       /* sharp inner tier overrides */
-      day = mix(day, pow(texture2D(regDay, ruv, -0.35).rgb, vec3(2.2)), rin * uHasRegD);
+      day = mix(day, pow(texture2D(regDay, ruv, -0.60).rgb, vec3(2.2)), rin * uHasRegD);
       /* ocean lift: deep water in the source imagery is crushed near black.
          Real oceans seen from space read as rich blue (atmospheric scattering),
          so lift only dark WATER pixels toward a deep sea blue. */
@@ -642,7 +645,7 @@ const cloudMat = new THREE.ShaderMaterial({
       float a = pow(clamp((aRaw - 0.10) * 1.11, 0.0, 1.0), 0.85);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
-      float poleFade = smoothstep(0.985, 0.93, abs(n.y));
+      float poleFade = smoothstep(0.968, 0.895, abs(n.y));
       a *= poleFade;
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
@@ -889,7 +892,7 @@ const angDistDeg = (la1,lo1,la2,lo2)=>{
 };
 
 /* ---- REAL AURORA: NOAA SWPC OVATION live oval, procedural geomagnetic fallback ---- */
-const aurUniforms = { aurMap:{ value: flatTex('#000000') }, sunDir: earthUniforms.sunDir, uAur:{ value: 1.35 } };
+const aurUniforms = { aurMap:{ value: flatTex('#000000') }, sunDir: earthUniforms.sunDir, uAur:{ value: 1.05 } };
 let aurReady = false;
 function paintAurora(coords){
   /* paint on an exact 360x181 grid first (matches the data), then smooth-upscale:
@@ -928,9 +931,9 @@ function paintAurora(coords){
   cx.imageSmoothingEnabled=true;
   cx.drawImage(grid,0,0,W,H);
   /* soften further: down-up resample */
-  const sm=document.createElement('canvas'); sm.width=128; sm.height=64;
+  const sm=document.createElement('canvas'); sm.width=72; sm.height=36;
   const sx=sm.getContext('2d'); sx.imageSmoothingEnabled=true;
-  sx.drawImage(cv,0,0,128,64);
+  sx.drawImage(cv,0,0,72,36);
   cx.clearRect(0,0,W,H); cx.drawImage(sm,0,0,W,H);
   const t=new THREE.CanvasTexture(cv);
   t.wrapS=THREE.RepeatWrapping; t.minFilter=THREE.LinearMipmapLinearFilter;
@@ -1407,7 +1410,7 @@ function loadRegional(){
     };
     attempt();
   };
-  const inner=mkBox(28), outer=mkBox(55);
+  const inner=mkBox(18), outer=mkBox(55);
   earthUniforms.uReg.value.set(inner.uc, inner.vc, inner.du, inner.dv);
   earthUniforms.uRegO.value.set(outer.uc, outer.vc, outer.du, outer.dv);
   tryTier(inner, 'BlueMarble_NextGeneration', [4096, 2048],
@@ -1603,6 +1606,30 @@ function update(){
     setFromArr(camera.up, eclNorthArr(n));
     applyParallax(0.075);
     camera.lookAt(0,0,0);
+  }
+
+  /* unlock spin: one smooth 360 orbit; locked/close-up also zoom in from the
+     full disk down to their normal camera */
+  if(_wakeT > 0){
+    const wt = Math.min(1, (performance.now() - _wakeT) / 2400);
+    if(wt >= 1){ _wakeT = -1; }
+    else {
+      const wE = wt < 0.5 ? 4*wt*wt*wt : 1 - Math.pow(-2*wt + 2, 3)/2;
+      const ang = 6.28319 * wE;
+      const cA = Math.cos(ang), sA = Math.sin(ang);
+      const p = camera.position;
+      const px = p.x*cA + p.z*sA, pz = -p.x*sA + p.z*cA;
+      p.x = px; p.z = pz;
+      const u = camera.up;
+      const ux = u.x*cA + u.z*sA, uz = -u.x*sA + u.z*cA;
+      u.x = ux; u.z = uz;
+      if(CFG.mode !== 'full'){
+        const L = p.length();
+        const tgt = camDist / L;
+        p.multiplyScalar(1 + (tgt - 1) * (1 - wE));
+      }
+      camera.lookAt(0,0,0);
+    }
   }
 }
 
