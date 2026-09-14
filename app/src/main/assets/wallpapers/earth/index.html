@@ -571,11 +571,12 @@ const earthMat = new THREE.ShaderMaterial({
       vec3 nSoft  = pow(texture2D(nightMap, vUv, uNightBlur).rgb, vec3(2.2));
       float rN = rin * uHasRegN;
       /* regional VIIRS lights: crisp cores + a touch of glow from a soft mip */
-      vec3 rgN = pow(texture2D(regNight, ruv, 0.4).rgb, vec3(2.2));
-      vec3 rgG = pow(texture2D(regNight, ruv, 2.2).rgb, vec3(2.2));
-      nSharp = mix(nSharp, rgN + rgG*0.6, rN);
-      vec3 lights = nSoft * (0.9 + 0.7*step(1.5, uNightBlur)) * (1.0 - 0.26*rN)
-                  + nSharp * (0.22 + 0.48*rN);
+      vec3 rgN = pow(texture2D(regNight, ruv, 0.0).rgb, vec3(2.2));
+      vec3 rgG = pow(texture2D(regNight, ruv, 2.0).rgb, vec3(2.2));
+      nSharp = mix(nSharp, rgN + rgG*0.5, rN);
+      float cuF = step(1.5, uNightBlur);
+      vec3 lights = nSoft * (0.9 + 0.7*cuF) * (1.0 - mix(0.26, 0.62, cuF)*rN)
+                  + nSharp * (0.22 + mix(0.48, 0.95, cuF)*rN);
       col += lights * vec3(1.0, 0.80, 0.52) * (1.0 - dmix) * 2.1 * uHasNight;
       /* atmospheric scattering: soft haze thickening toward the limb */
       float mu = max(dot(nGeo, vd), 0.0);
@@ -1593,7 +1594,7 @@ function update(){
   const sd = eclToArr(s.lam, 0, n);
   earthUniforms.sunDir.value.set(sd[0], sd[1], sd[2]);
   /* sharp lights when far, smooth blurred glow when zoomed in close */
-  earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 3.0 : 0.6;
+  earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 2.2 : 0.6;
   earthUniforms.uDetail.value    = (CFG.mode === 'closeup') ? 1.0 : 0.0;
   sunLight.position.set(sd[0]*100, sd[1]*100, sd[2]*100);
 
