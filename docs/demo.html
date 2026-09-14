@@ -113,7 +113,8 @@ let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0, _wakeT=-1;
 let _coreReady=false, _introP=1, _introLast=0, _introT0=0, _pFade=1;
 window._terraWake = function(){ if(CFG.wake && _introP >= 1) _wakeT = performance.now(); };
 let _cuTgt = new THREE.Vector3();
-try{ if(CFG.intro){ _introP = (localStorage.getItem('terraIntroSeen') === '1') ? 1 : 0; } }catch(e){ if(CFG.intro) _introP = 0; }
+if(CFG.intro) _introP = 0;
+let _introDur = 20, _introShort = false;
 try{ setTimeout(function(){ _coreReady = true; }, 75000); }catch(e){}
 window._terraTilt = function(x, y){
   _tiltNative = Date.now();
@@ -1252,25 +1253,25 @@ try{
 /* ---- POLE CAPS: soft covers over the equirect pinch (hole + stretch marks) ---- */
 let _capN=null, _capS=null;
 try{
-  const capTex=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=256;
+  const capGrad=function(rev){
+    const cv=document.createElement('canvas'); cv.width=2; cv.height=256;
     const cx=cv.getContext('2d');
-    const gr=cx.createRadialGradient(128,128,0,128,128,128);
-    gr.addColorStop(0,'rgba(255,255,255,0.95)');
-    gr.addColorStop(0.55,'rgba(248,250,252,0.85)');
-    gr.addColorStop(0.8,'rgba(244,247,250,0.40)');
-    gr.addColorStop(1,'rgba(244,247,250,0)');
-    cx.fillStyle=gr; cx.fillRect(0,0,256,256);
-    return new THREE.CanvasTexture(cv); })();
-  const mkCap=function(sy){
-    const m=new THREE.MeshBasicMaterial({ map:capTex, transparent:true, depthWrite:false });
-    const g3=new THREE.CircleGeometry(0.155, 48);
+    const gr=cx.createLinearGradient(0, rev?256:0, 0, rev?0:256);
+    gr.addColorStop(0.0,'rgba(255,255,255,0.96)');
+    gr.addColorStop(0.55,'rgba(250,252,254,0.88)');
+    gr.addColorStop(0.82,'rgba(246,249,252,0.38)');
+    gr.addColorStop(1.0,'rgba(246,249,252,0)');
+    cx.fillStyle=gr; cx.fillRect(0,0,2,256);
+    return new THREE.CanvasTexture(cv);
+  };
+  const mkCap=function(north){
+    const m=new THREE.MeshBasicMaterial({ map:capGrad(!north), transparent:true, depthWrite:false });
+    const g3=new THREE.SphereGeometry(1.0069, 48, 8, 0, Math.PI*2, north?0:(Math.PI-0.17), 0.17);
     const mesh=new THREE.Mesh(g3, m);
-    mesh.position.set(0, sy*1.0068, 0);
-    mesh.rotation.x = -sy*Math.PI/2;
     earth.add(mesh);
     return mesh;
   };
-  _capN=mkCap(1); _capS=mkCap(-1);
+  _capN=mkCap(true); _capS=mkCap(false);
 }catch(e){}
 
 /* ---- DIVE STARS: volumetric field you fly through during the intro ---- */
@@ -1280,11 +1281,11 @@ try{
     const N=1200, g2=new THREE.BufferGeometry(), pos2=new Float32Array(N*3);
     for(let i=0;i<N;i++){
       const u3=Math.random()*2-1, th3=Math.random()*6.2832, rr3=Math.sqrt(1-u3*u3);
-      const R3=150+Math.pow(Math.random(),1.6)*2300;
+      const R3=340+Math.pow(Math.random(),1.6)*2100;
       pos2[i*3]=rr3*Math.cos(th3)*R3; pos2[i*3+1]=u3*R3; pos2[i*3+2]=rr3*Math.sin(th3)*R3;
     }
     g2.setAttribute('position', new THREE.BufferAttribute(pos2,3));
-    const m2=new THREE.PointsMaterial({ color:0xcfe2ff, size:1.4, sizeAttenuation:true,
+    const m2=new THREE.PointsMaterial({ map:glowTexture(), color:0xcfe2ff, size:1.6, sizeAttenuation:true,
       transparent:true, opacity:0.7, depthWrite:false, blending:THREE.AdditiveBlending });
     _diveStars=new THREE.Points(g2, m2); scene.add(_diveStars);
   }
@@ -1391,10 +1392,13 @@ function updateExtras(gm, sd, mdU, illum){
   }
   /* pole caps follow the real sunlight */
   if(_capN && _capS){
-    const lnP = 0.10 + 0.95*Math.max(sd[1], 0);
-    _capN.material.color.setRGB(Math.min(1,lnP), Math.min(1,lnP), Math.min(1,lnP*1.04));
-    const lsP = 0.10 + 0.95*Math.max(-sd[1], 0);
-    _capS.material.color.setRGB(Math.min(1,lsP), Math.min(1,lsP), Math.min(1,lsP*1.04));
+    const smst=function(a,b,x){ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+    const dN=smst(-0.12, 0.15, sd[1]);
+    const lnP=0.06 + 0.94*dN;
+    _capN.material.color.setRGB(lnP, lnP, Math.min(1,lnP*1.03));
+    const dS=smst(-0.12, 0.15, -sd[1]);
+    const lsP=0.06 + 0.94*dS;
+    _capS.material.color.setRGB(lsP, lsP, Math.min(1,lsP*1.03));
   }
   /* sun glare: blooms at the true screen position of the Sun, occlusion-aware */
   if(_glare){
@@ -1732,12 +1736,10 @@ function update(){
     const dtI = Math.min(0.1, _introLast ? (nowI - _introLast)/1000 : 0.016); _introLast = nowI;
     const tI = (nowI - _introT0) / 1000;
     const gate = _coreReady ? 1.0 : 0.82;
-    const pT = Math.min(tI / 20, gate);
+    if(_coreReady && tI < 2.5 && !_introShort){ _introDur = 7; _introShort = true; }
+    const pT = Math.min(tI / _introDur, gate);
     _introP = _introP + (pT - _introP) * Math.min(1, dtI * 0.55);
-    if(_introP > 0.9998){
-      _introP = 1;
-      try{ localStorage.setItem('terraIntroSeen', '1'); }catch(e){}
-    }
+    if(_introP > 0.9998){ _introP = 1; }
     if(_diveStars){
       _diveStars.material.opacity = 0.7 * (1 - Math.min(1, Math.max(0, (_introP - 0.70) / 0.25)));
       if(_introP >= 1){
