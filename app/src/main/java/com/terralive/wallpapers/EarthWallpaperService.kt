@@ -27,6 +27,7 @@ class EarthWallpaperService : WallpaperService() {
         /* ---- motion parallax: accelerometer -> JS at UI rate, only while visible ---- */
         private var sensorManager: SensorManager? = null
         private var sensorOn = false
+        private var hiddenAt = 0L
         private val tiltListener = object : SensorEventListener {
             override fun onSensorChanged(e: SensorEvent) {
                 val wv = webView ?: return
@@ -92,9 +93,12 @@ class EarthWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             if (visible) {
                 webView?.onResume(); webView?.resumeTimers(); startTilt()
-                webView?.evaluateJavascript("window._terraWake&&_terraWake()", null)
+                if (hiddenAt > 0L && System.currentTimeMillis() - hiddenAt > 45000L) {
+                    webView?.evaluateJavascript("window._terraWake&&_terraWake()", null)
+                }
+                hiddenAt = 0L
             }
-            else { stopTilt(); webView?.onPause(); webView?.pauseTimers() }
+            else { hiddenAt = System.currentTimeMillis(); stopTilt(); webView?.onPause(); webView?.pauseTimers() }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
