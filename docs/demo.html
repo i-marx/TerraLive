@@ -650,9 +650,14 @@ const cloudMat = new THREE.ShaderMaterial({
       /* night clouds are moonlit: bright grey-blue decks under a full moon,
          faint slate at new moon - so weather never just evaporates at night */
       float mlit = max(dot(n, uMoonDir), 0.0);
-      vec3 nightC = vec3(0.026, 0.034, 0.052)
+      vec3 nightC = vec3(0.034, 0.042, 0.062)
                   + vec3(0.115, 0.135, 0.175) * mlit * uMoonAmt;
       vec3 c = mix(nightC, dayC, dm);
+      /* dusk band: clouds stay sunset-lit through the terminator instead of
+         cutting to black, then hand over to moonlight */
+      float ca2 = dot(n, sunDir);
+      float tw2 = smoothstep(-0.22, 0.05, ca2) * (1.0 - smoothstep(0.05, 0.30, ca2));
+      c += vec3(0.50, 0.29, 0.19) * tw2 * 0.40;
       c = pow(aces(c), vec3(1.0/2.2));
       /* keep night clouds fairly opaque so they read as shapes over the lights */
       float alpha = a * mix(0.80, 0.94, dm);
