@@ -82,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         bg.setBackgroundColor(Color.BLACK)
         bg.settings.javaScriptEnabled = true
         bg.settings.allowFileAccess = true
-        bg.loadUrl("file:///android_asset/wallpapers/earth/index.html?look=3&motion=0&wake=0")
+        bg.loadUrl("file:///android_asset/wallpapers/earth/index.html?look=3&motion=0&wake=0&intro=0")
         if (Build.VERSION.SDK_INT >= 31) {
             bg.setRenderEffect(RenderEffect.createBlurEffect(55f, 55f, Shader.TileMode.CLAMP))
         } else {
