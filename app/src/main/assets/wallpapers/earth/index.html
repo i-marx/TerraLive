@@ -652,7 +652,7 @@ const cloudMat = new THREE.ShaderMaterial({
       float a = pow(clamp((aRaw - 0.10) * 1.11, 0.0, 1.0), 0.85);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
-      float poleFade = smoothstep(0.968, 0.895, abs(n.y));
+      float poleFade = smoothstep(0.9945, 0.958, abs(n.y));
       a *= poleFade;
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
@@ -1138,8 +1138,8 @@ try{
     const sp=new THREE.Sprite(m); sp.scale.set(scale,scale,1); scene.add(sp);
     return sp;
   };
-  sunCore=mkSun(38, 1.0, 1.0, 0.99, 0.94);
-  sunHalo=mkSun(120, 0.20, 1.0, 0.92, 0.78);
+  sunCore=mkSun(64, 1.0, 1.0, 0.99, 0.94);
+  sunHalo=mkSun(260, 0.28, 1.0, 0.92, 0.78);
 }catch(e){}
 
 /* ---- DEMO SELF-RECORDER: captures the canvas to a webm in Downloads ---- */
@@ -1621,7 +1621,7 @@ function update(){
      The whole camera system rotates rigidly, so the final frame IS the
      static view - seamless by construction. */
   if(_wakeT > 0){
-    const wt = Math.min(1, (performance.now() - _wakeT) / 2600);
+    const wt = Math.min(1, (performance.now() - _wakeT) / 5200);
     if(wt >= 1){ _wakeT = -1; }
     else {
       const ang = 3.14159 * Math.pow(1 - wt, 3);
@@ -1647,7 +1647,7 @@ function update(){
     const dtI = Math.min(0.1, _introLast ? (nowI - _introLast)/1000 : 0.016); _introLast = nowI;
     const tI = (nowI - _introT0) / 1000;
     const gate = _coreReady ? 1.0 : 0.82;
-    const pT = Math.min(tI / 30, gate);
+    const pT = Math.min(tI / 20, gate);
     _introP = _introP + (pT - _introP) * Math.min(1, dtI * 0.55);
     if(_introP > 0.9975){
       _introP = 1;
