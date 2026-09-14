@@ -110,7 +110,7 @@ const CFG = {
 /* ---- motion parallax: device tilt shifts the camera slightly (3D depth).
    Fed natively by the app at ~16Hz; deviceorientation is the browser fallback. ---- */
 let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0, _wakeT=-1;
-let _coreReady=false, _introP=1, _introLast=0, _introT0=0;
+let _coreReady=false, _introP=1, _introLast=0, _introT0=0, _pFade=1;
 window._terraWake = function(){ if(CFG.wake && _introP >= 1) _wakeT = performance.now(); };
 let _cuTgt = new THREE.Vector3();
 try{ if(CFG.intro){ _introP = (localStorage.getItem('terraIntroSeen') === '1') ? 1 : 0; } }catch(e){ if(CFG.intro) _introP = 0; }
@@ -1249,19 +1249,43 @@ try{
   fetchIce(); setInterval(fetchIce, 12*60*60*1000);
 }catch(e){}
 
+/* ---- POLE CAPS: soft covers over the equirect pinch (hole + stretch marks) ---- */
+let _capN=null, _capS=null;
+try{
+  const capTex=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=256;
+    const cx=cv.getContext('2d');
+    const gr=cx.createRadialGradient(128,128,0,128,128,128);
+    gr.addColorStop(0,'rgba(255,255,255,0.95)');
+    gr.addColorStop(0.55,'rgba(248,250,252,0.85)');
+    gr.addColorStop(0.8,'rgba(244,247,250,0.40)');
+    gr.addColorStop(1,'rgba(244,247,250,0)');
+    cx.fillStyle=gr; cx.fillRect(0,0,256,256);
+    return new THREE.CanvasTexture(cv); })();
+  const mkCap=function(sy){
+    const m=new THREE.MeshBasicMaterial({ map:capTex, transparent:true, depthWrite:false });
+    const g3=new THREE.CircleGeometry(0.155, 48);
+    const mesh=new THREE.Mesh(g3, m);
+    mesh.position.set(0, sy*1.0068, 0);
+    mesh.rotation.x = -sy*Math.PI/2;
+    earth.add(mesh);
+    return mesh;
+  };
+  _capN=mkCap(1); _capS=mkCap(-1);
+}catch(e){}
+
 /* ---- DIVE STARS: volumetric field you fly through during the intro ---- */
 let _diveStars=null;
 try{
   if(_introP < 1){
-    const N=1600, g2=new THREE.BufferGeometry(), pos2=new Float32Array(N*3);
+    const N=1200, g2=new THREE.BufferGeometry(), pos2=new Float32Array(N*3);
     for(let i=0;i<N;i++){
       const u3=Math.random()*2-1, th3=Math.random()*6.2832, rr3=Math.sqrt(1-u3*u3);
-      const R3=60+Math.pow(Math.random(),1.6)*2400;
+      const R3=150+Math.pow(Math.random(),1.6)*2300;
       pos2[i*3]=rr3*Math.cos(th3)*R3; pos2[i*3+1]=u3*R3; pos2[i*3+2]=rr3*Math.sin(th3)*R3;
     }
     g2.setAttribute('position', new THREE.BufferAttribute(pos2,3));
-    const m2=new THREE.PointsMaterial({ color:0xcfe2ff, size:2.6, sizeAttenuation:true,
-      transparent:true, opacity:0.85, depthWrite:false, blending:THREE.AdditiveBlending });
+    const m2=new THREE.PointsMaterial({ color:0xcfe2ff, size:1.4, sizeAttenuation:true,
+      transparent:true, opacity:0.7, depthWrite:false, blending:THREE.AdditiveBlending });
     _diveStars=new THREE.Points(g2, m2); scene.add(_diveStars);
   }
 }catch(e){}
@@ -1307,6 +1331,7 @@ function updateExtras(gm, sd, mdU, illum){
     if(_dv > 0.02) _tiltMove = now;
     _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5);
   }
+  _pFade = (_introP < 1) ? 0 : Math.min(1, _pFade + dt*0.5);
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
@@ -1363,6 +1388,13 @@ function updateExtras(gm, sd, mdU, illum){
     const sc=base*(0.35 + e*1.5);
     q.sp.scale.set(sc, sc, 1);
     q.sp.material.opacity=(0.30 + Math.min(0.25,(q.mag-4.5)*0.09))*(1-e)*ageF*dayDim;
+  }
+  /* pole caps follow the real sunlight */
+  if(_capN && _capS){
+    const lnP = 0.10 + 0.95*Math.max(sd[1], 0);
+    _capN.material.color.setRGB(Math.min(1,lnP), Math.min(1,lnP), Math.min(1,lnP*1.04));
+    const lsP = 0.10 + 0.95*Math.max(-sd[1], 0);
+    _capS.material.color.setRGB(Math.min(1,lsP), Math.min(1,lsP), Math.min(1,lsP*1.04));
   }
   /* sun glare: blooms at the true screen position of the Sun, occlusion-aware */
   if(_glare){
@@ -1570,6 +1602,8 @@ function setFromArr(vec, a){ vec.set(a[0], a[1], a[2]); return vec; }
 
 function applyParallax(amp){
   if(!CFG.motion) return;
+  amp *= _pFade;
+  if(amp <= 0) return;
   const p = camera.position;
   const r = new THREE.Vector3().crossVectors(camera.up, p).normalize();
   const uu = new THREE.Vector3().crossVectors(p, r).normalize();
@@ -1640,7 +1674,7 @@ function update(){
     right = right.multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll));
     up = new THREE.Vector3().crossVectors(right, fwd);
     camera.up.copy(up);
-    if(CFG.motion){ camera.position.addScaledVector(right, _pjx*0.026).addScaledVector(up, _pjy*0.026); }
+    if(CFG.motion){ camera.position.addScaledVector(right, _pjx*0.026*_pFade).addScaledVector(up, _pjy*0.026*_pFade); }
     _cuTgt.set(camera.position.x + fwd.x, camera.position.y + fwd.y, camera.position.z + fwd.z);
     camera.lookAt(_cuTgt.x, _cuTgt.y, _cuTgt.z);
   } else if(CFG.mode === 'locked'){
@@ -1700,12 +1734,12 @@ function update(){
     const gate = _coreReady ? 1.0 : 0.82;
     const pT = Math.min(tI / 20, gate);
     _introP = _introP + (pT - _introP) * Math.min(1, dtI * 0.55);
-    if(_introP > 0.9975){
+    if(_introP > 0.9998){
       _introP = 1;
       try{ localStorage.setItem('terraIntroSeen', '1'); }catch(e){}
     }
     if(_diveStars){
-      _diveStars.material.opacity = 0.85 * (1 - Math.min(1, Math.max(0, (_introP - 0.70) / 0.25)));
+      _diveStars.material.opacity = 0.7 * (1 - Math.min(1, Math.max(0, (_introP - 0.70) / 0.25)));
       if(_introP >= 1){
         try{ scene.remove(_diveStars); _diveStars.geometry.dispose(); _diveStars.material.dispose(); }catch(e){}
         _diveStars = null;
