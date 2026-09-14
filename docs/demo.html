@@ -86,6 +86,9 @@ const CFG = {
     if(q.has('motion')) CFG.motion = (q.get('motion')==='0'||q.get('motion')==='false') ? 0 : 1;
     CFG.wake = 1;
     if(q.has('wake')) CFG.wake = q.get('wake')==='0' ? 0 : 1;
+    CFG.intro = 1;
+    if(q.has('intro')) CFG.intro = q.get('intro')==='0' ? 0 : 1;
+    if(CFG.demo) CFG.intro = 0;
     CFG.glint = 1;
     if(q.has('glint')) CFG.glint = q.get('glint')==='0' ? 0 : 1;
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
@@ -107,7 +110,10 @@ const CFG = {
 /* ---- motion parallax: device tilt shifts the camera slightly (3D depth).
    Fed natively by the app at ~16Hz; deviceorientation is the browser fallback. ---- */
 let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0, _wakeT=-1;
-window._terraWake = function(){ if(CFG.wake) _wakeT = performance.now(); };
+let _coreReady=false, _introP=1, _introLast=0;
+window._terraWake = function(){ if(CFG.wake && _introP >= 1) _wakeT = performance.now(); };
+try{ if(CFG.intro) _introP = 0; }catch(e){}
+try{ setTimeout(function(){ _coreReady = true; }, 75000); }catch(e){}
 window._terraTilt = function(x, y){
   _tiltNative = Date.now();
   if(isFinite(x) && isFinite(y)){
@@ -1435,6 +1441,7 @@ Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
     buildStorms(c);
   }
   if(m){ moonMat.map = m; moonMat.color.set(0xffffff); moonMat.needsUpdate = true; }
+  _coreReady = true;
 });
 /* pull fresh satellite cloud cover every 3 hours */
 setInterval(()=>{
@@ -1630,6 +1637,32 @@ function update(){
       }
       camera.lookAt(0,0,0);
     }
+  }
+
+  /* cold-start intro: dive from the starfield down to the planet while the
+     textures stream in. Holds in a slow approach until the core maps are
+     ready, so no one ever watches low-res detail pop in. */
+  if(_introP < 1){
+    const nowI = performance.now();
+    const dtI = Math.min(0.1, _introLast ? (nowI - _introLast)/1000 : 0.016); _introLast = nowI;
+    let rate;
+    if(_coreReady) rate = 0.20;
+    else if(_introP < 0.55) rate = 0.11;
+    else rate = 0.004;
+    _introP = Math.min(1, _introP + rate * dtI);
+    const eI = _introP * _introP * (3 - 2 * _introP);
+    const L1 = camera.position.length();
+    const len = Math.exp(Math.log(2500) * (1 - eI) + Math.log(L1) * eI);
+    const dir = camera.position.clone().normalize();
+    const ang2 = 2.6 * (1 - eI);
+    const c2 = Math.cos(ang2), s2 = Math.sin(ang2);
+    const dx = dir.x * c2 + dir.z * s2, dz = -dir.x * s2 + dir.z * c2;
+    dir.x = dx; dir.z = dz;
+    camera.position.copy(dir.multiplyScalar(len));
+    const u2 = camera.up;
+    const ux2 = u2.x * c2 + u2.z * s2, uz2 = -u2.x * s2 + u2.z * c2;
+    u2.x = ux2; u2.z = uz2;
+    camera.lookAt(0, 0, 0);
   }
 }
 
