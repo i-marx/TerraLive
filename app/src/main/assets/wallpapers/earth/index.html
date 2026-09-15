@@ -397,7 +397,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r64';
+window._TERRA_REV = 'r66';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -428,48 +428,37 @@ function repairCloudCanvas(im, donor){
   const cx=cv.getContext('2d');
   cx.drawImage(im, 0, 0, W, H);
   const dd=cx.getImageData(0, 0, W, H); const p=dd.data;
-  const meanArr=new Float32Array(BW*BH);
-  const flat=new Uint8Array(BW*BH);
-  for(let by=0; by<BH; by++) for(let bx2=0; bx2<BW; bx2++){
-    let sum=0, sum2=0, n=0;
+  const mean=new Float32Array(BW*BH);
+  const sdA=new Float32Array(BW*BH);
+  for(let by=0; by<BH; by++) for(let bx=0; bx<BW; bx++){
+    let s1=0, s2=0, n=0;
     for(let sy=2; sy<B; sy+=4) for(let sx=2; sx<B; sx+=4){
-      const idx=((by*B+sy)*W + (bx2*B+sx))*4;
+      const idx=((by*B+sy)*W + (bx*B+sx))*4;
       const v=p[idx]*p[idx+3]/255;
-      sum+=v; sum2+=v*v; n++;
+      s1+=v; s2+=v*v; n++;
     }
-    const mean=sum/n;
-    meanArr[by*BW+bx2]=mean;
-    const sd=Math.sqrt(Math.max(0, sum2/n - mean*mean));
-    if(mean>243 && sd<1.8) flat[by*BW+bx2]=1;
+    mean[by*BW+bx]=s1/n;
+    sdA[by*BW+bx]=Math.sqrt(Math.max(0, s2/n - (s1/n)*(s1/n)));
   }
-  const lab=new Int32Array(BW*BH).fill(-1);
-  let keep=new Uint8Array(BW*BH);
+  const keep=new Uint8Array(BW*BH);
+  const depth=new Int16Array(BW*BH).fill(-1);
+  const queue=[];
   let kept=0;
-  for(let s0=0; s0<BW*BH; s0++){
-    if(!flat[s0] || lab[s0]>=0) continue;
-    const stack=[s0]; lab[s0]=s0; const mem=[];
-    while(stack.length){
-      const c=stack.pop(); mem.push(c);
-      const cy=(c/BW)|0;
-      const nbs=[c-1, c+1, c-BW, c+BW];
-      for(let t2=0; t2<4; t2++){
-        const t=nbs[t2];
-        if(t<0 || t>=BW*BH) continue;
-        if((t===c-1 || t===c+1) && ((t/BW)|0)!==cy) continue;
-        if(flat[t] && lab[t]<0){ lab[t]=s0; stack.push(t); }
-      }
-    }
-    if(mem.length>=12){ for(let t2=0; t2<mem.length; t2++) keep[mem[t2]]=1; kept+=mem.length; }
+  for(let q=0; q<BW*BH; q++){
+    if(mean[q]>243 && sdA[q]<1.8){ depth[q]=0; keep[q]=1; kept++; queue.push(q); }
   }
-  for(let pass=0; pass<6; pass++){
-    const nk=new Uint8Array(keep);
-    for(let by=0; by<BH; by++) for(let bx2=0; bx2<BW; bx2++){
-      const q2=by*BW+bx2;
-      if(keep[q2] || meanArr[q2]<=140) continue;
-      if((bx2>0 && keep[q2-1]) || (bx2<BW-1 && keep[q2+1]) ||
-         (by>0 && keep[q2-BW]) || (by<BH-1 && keep[q2+BW])){ nk[q2]=1; kept++; }
+  let qi=0;
+  while(qi<queue.length){
+    const c=queue[qi++]; const d0=depth[c];
+    if(d0>=14) continue;
+    const cy=(c/BW)|0;
+    const nbs=[c-1, c+1, c-BW, c+BW];
+    for(let t2=0; t2<4; t2++){
+      const t=nbs[t2];
+      if(t<0 || t>=BW*BH) continue;
+      if((t===c-1 || t===c+1) && ((t/BW)|0)!==cy) continue;
+      if(depth[t]<0 && mean[t]>140){ depth[t]=d0+1; keep[t]=1; kept++; queue.push(t); }
     }
-    keep=nk;
   }
   if(kept>0){
     const mk=document.createElement('canvas'); mk.width=BW; mk.height=BH;
@@ -488,10 +477,10 @@ function repairCloudCanvas(im, donor){
       const dx2=dc2.getContext('2d'); dx2.imageSmoothingEnabled=true; dx2.drawImage(donor, 0, 0, W, H);
       pv=dx2.getImageData(0, 0, W, H).data;
     } else {
-      const s1=document.createElement('canvas'); s1.width=96; s1.height=48;
-      const s1x=s1.getContext('2d'); s1x.imageSmoothingEnabled=true; s1x.drawImage(cv, 0, 0, 96, 48);
-      const s2=document.createElement('canvas'); s2.width=W; s2.height=H;
-      const s2x=s2.getContext('2d'); s2x.imageSmoothingEnabled=true; s2x.drawImage(s1, 0, 0, W, H);
+      const s1c=document.createElement('canvas'); s1c.width=96; s1c.height=48;
+      const s1x=s1c.getContext('2d'); s1x.imageSmoothingEnabled=true; s1x.drawImage(cv, 0, 0, 96, 48);
+      const s2c=document.createElement('canvas'); s2c.width=W; s2c.height=H;
+      const s2x=s2c.getContext('2d'); s2x.imageSmoothingEnabled=true; s2x.drawImage(s1c, 0, 0, W, H);
       pv=s2x.getImageData(0, 0, W, H).data;
     }
     const donorScale=donor?1.0:0.92;
@@ -507,7 +496,6 @@ function repairCloudCanvas(im, donor){
     }
     cx.putImageData(dd, 0, 0);
   }
-  /* soften the mirror-filled polar strips (above ~78 deg) */
   const yN=Math.round((12/180)*H);
   const smP=document.createElement('canvas'); smP.width=96; smP.height=yN;
   const sxp=smP.getContext('2d'); sxp.imageSmoothingEnabled=true;
@@ -586,10 +574,10 @@ function loadCloudsLive(){
         donorP.then(function(donor){
           try{
             const r=repairCloudCanvas(im, donor);
-            if(r.frac < 0.015){
+            if(r.frac < 0.02){
               try{ r.cv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); }catch(e){}
             }
-            if(r.frac > 0.08 && !donor){
+            if(r.frac > 0.18 && !donor){
               loadCloudsModel().then(function(mt){ res(mt || texFromCloudCanvas(r.cv)); });
               return;
             }
