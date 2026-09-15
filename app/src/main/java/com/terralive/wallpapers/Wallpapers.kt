@@ -19,7 +19,8 @@ object Wallpapers {
     const val KEY_LON = "user_lon"           // Float
     const val KEY_LOOK = "look_variant"      // Int 0..5 (testing)
     const val KEY_MOTION = "motion_parallax"  // Boolean, default true
-    const val KEY_WAKE = "wake_spin"          // Boolean, default true
+    const val KEY_WAKE = "wake_spin"          // Boolean (retired)
+    const val KEY_ROT = "slow_rotation"       // Boolean, default false
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
@@ -44,13 +45,14 @@ object Wallpapers {
         val base = assetUrl(id)
         if (id != "earth") return base
         val p = prefs(ctx)
-        val mode = p.getString(KEY_MODE, "full") ?: "full"
+        val mode0 = p.getString(KEY_MODE, "full") ?: "full"
+        val mode = if (mode0 == "locked") "closeup" else mode0
         val look = p.getInt(KEY_LOOK, 3)
         val mot = if (p.getBoolean(KEY_MOTION, true)) 1 else 0
-        val wk = if (p.getBoolean(KEY_WAKE, true)) 1 else 0
+        val rt = if (p.getBoolean(KEY_ROT, false)) 1 else 0
         val lat = p.getFloat(KEY_LAT, Float.NaN)
         val lon = p.getFloat(KEY_LON, Float.NaN)
-        val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot).append("&wake=").append(wk)
+        val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot).append("&rot=").append(rt)
         if (mode != "full" && !lat.isNaN() && !lon.isNaN())
             qs.append("&mode=").append(mode).append("&lat=").append(lat).append("&lon=").append(lon)
         return base + qs.toString()
