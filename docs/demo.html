@@ -86,6 +86,8 @@ const CFG = {
     if(q.has('motion')) CFG.motion = (q.get('motion')==='0'||q.get('motion')==='false') ? 0 : 1;
     CFG.wake = 1;
     if(q.has('wake')) CFG.wake = q.get('wake')==='0' ? 0 : 1;
+    CFG.rot = 0;
+    if(q.has('rot')) CFG.rot = q.get('rot')==='1' ? 1 : 0;
     CFG.intro = 1;
     if(q.has('intro')) CFG.intro = q.get('intro')==='0' ? 0 : 1;
     if(CFG.demo) CFG.intro = 0;
@@ -110,7 +112,7 @@ const CFG = {
 /* ---- motion parallax: device tilt shifts the camera slightly (3D depth).
    Fed natively by the app at ~16Hz; deviceorientation is the browser fallback. ---- */
 let _ptx=0, _pty=0, _pjx=0, _pjy=0, _tiltNative=0, _wakeT=-1;
-let _coreReady=false, _introP=1, _introLast=0, _introT0=0, _pFade=1;
+let _coreReady=false, _introP=1, _introLast=0, _introT0=0, _pFade=1, _spin=0;
 window._terraWake = function(){ if(CFG.wake && _introP >= 1) _wakeT = performance.now(); };
 let _cuTgt = new THREE.Vector3();
 if(CFG.intro) _introP = 0;
@@ -1333,6 +1335,7 @@ function updateExtras(gm, sd, mdU, illum){
     _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5);
   }
   _pFade = (_introP < 1) ? 0 : Math.min(1, _pFade + dt*0.5);
+  if(CFG.rot && CFG.mode === 'full' && _introP >= 1){ _spin += dt * 0.015; }
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
@@ -1620,7 +1623,7 @@ function update(){
   const n = jdNow() - 2451545.0;
 
   /* Earth rotation: Greenwich meridian sits at RA = GMST */
-  const gm = gmstDeg(n) * D2R;
+  const gm = gmstDeg(n) * D2R + _spin;
   earth.rotation.y  = gm;
   /* live satellite clouds are already where they really are - no artificial drift */
   const drift = liveClouds ? (CFG.demo ? _demoE*0.045 : 0) : (n * 0.22) % (Math.PI*2);
