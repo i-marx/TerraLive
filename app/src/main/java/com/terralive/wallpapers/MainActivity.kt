@@ -285,10 +285,10 @@ class MainActivity : AppCompatActivity() {
             light(this)
         })
         sectionLabel(body, "VIEW")
-        val currentMode = Wallpapers.viewMode(this)
+        val currentMode0 = Wallpapers.viewMode(this)
+        val currentMode = if (currentMode0 == "locked") "closeup" else currentMode0
         val modes = listOf(
             Triple("full", "Full view", "Earth from deep space, real day and night"),
-            Triple("locked", "Locked to my place", "Your location centred, the Sun sweeps past"),
             Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain")
         )
         for ((id, title, sub) in modes) {
@@ -302,10 +302,10 @@ class MainActivity : AppCompatActivity() {
             "The planet shifts subtly as you move your phone") {
             p.edit().putBoolean(Wallpapers.KEY_MOTION, !motionOn).apply(); refreshSheet()
         })
-        val wakeOn = p.getBoolean(Wallpapers.KEY_WAKE, true)
-        body.addView(optionCard(wakeOn, "Unlock spin",
-            "A quick 360 orbit of the planet each time you return") {
-            p.edit().putBoolean(Wallpapers.KEY_WAKE, !wakeOn).apply(); refreshSheet()
+        val rotOn = p.getBoolean(Wallpapers.KEY_ROT, false)
+        body.addView(optionCard(rotOn, "Slow rotation",
+            "The planet turns gently on its axis (full view)") {
+            p.edit().putBoolean(Wallpapers.KEY_ROT, !rotOn).apply(); refreshSheet()
         })
     }
 }
