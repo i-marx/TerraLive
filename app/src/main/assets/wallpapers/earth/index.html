@@ -402,8 +402,75 @@ function liveCloudURLs(){  // cache-bust once per update window so new satellite
   const t = Math.floor(Date.now()/CFG.cloudRefresh);
   return URLS.cloudsLive.map(u=>u+'?t='+t);
 }
+/* The live cloud composite ships with real defects: saturated corrupt tile
+   blocks (hard staircase edges) and mirror-filled polar strips. Every download
+   is repaired here before it touches the globe. */
+function repairCloudCanvas(im){
+  const W=4096, H=2048;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const cx=cv.getContext('2d');
+  cx.drawImage(im, 0, 0, W, H);
+  const dd=cx.getImageData(0, 0, W, H); const p=dd.data;
+  const inv=new Uint8Array(W*H);
+  for(let i=0, q=0; i<p.length; i+=4, q++){
+    if(p[i]>=251 && p[i+3]>=251) inv[q]=1;
+  }
+  const cvB=document.createElement('canvas'); cvB.width=W; cvB.height=H;
+  const bx=cvB.getContext('2d');
+  const db=bx.createImageData(W, H); const pb=db.data;
+  for(let i=0, q=0; i<p.length; i+=4, q++){
+    if(!inv[q]){ pb[i]=p[i]; pb[i+1]=p[i+1]; pb[i+2]=p[i+2]; pb[i+3]=p[i+3]; }
+  }
+  bx.putImageData(db, 0, 0);
+  const f1=document.createElement('canvas'); f1.width=64; f1.height=32;
+  const fx=f1.getContext('2d'); fx.imageSmoothingEnabled=true; fx.drawImage(cvB, 0, 0, 64, 32);
+  const f2=document.createElement('canvas'); f2.width=W; f2.height=H;
+  const gx=f2.getContext('2d'); gx.imageSmoothingEnabled=true; gx.drawImage(f1, 0, 0, W, H);
+  const df=gx.getImageData(0, 0, W, H); const pf=df.data;
+  for(let i=0, q=0; i<p.length; i+=4, q++){
+    if(inv[q]){
+      p[i]=pf[i]; p[i+1]=pf[i+1]; p[i+2]=pf[i+2];
+      p[i+3]=Math.round(pf[i+3]*0.85);
+    }
+  }
+  cx.putImageData(dd, 0, 0);
+  /* soften the mirror-filled polar strips (above ~78 deg) */
+  const yN=Math.round((12/180)*H);
+  const smP=document.createElement('canvas'); smP.width=96; smP.height=yN;
+  const sxp=smP.getContext('2d'); sxp.imageSmoothingEnabled=true;
+  cx.imageSmoothingEnabled=true;
+  sxp.drawImage(cv, 0, 0, W, yN, 0, 0, 96, yN);
+  cx.drawImage(smP, 0, 0, 96, yN, 0, 0, W, yN);
+  sxp.clearRect(0, 0, 96, yN);
+  sxp.drawImage(cv, 0, H-yN, W, yN, 0, 0, 96, yN);
+  cx.drawImage(smP, 0, 0, 96, yN, 0, H-yN, W, yN);
+  return cv;
+}
+function texFromCloudCanvas(cv){
+  const t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+  t.generateMipmaps=true;
+  return t;
+}
+function loadCloudsLive(){
+  const urls=liveCloudURLs().slice().sort(function(a, b){
+    return ((a.indexOf('4096')>=0)?-1:1) - ((b.indexOf('4096')>=0)?-1:1);
+  });
+  return new Promise(function(res){
+    const tryOne=function(i){
+      if(i>=urls.length){ res(null); return; }
+      const im=new Image(); im.crossOrigin='anonymous';
+      im.onload=function(){ try{ res(texFromCloudCanvas(repairCloudCanvas(im))); }catch(e){ res(null); } };
+      im.onerror=function(){ tryOne(i+1); };
+      im.src=urls[i];
+    };
+    tryOne(0);
+  });
+}
 function loadClouds(){
-  return loadTex(liveCloudURLs()).then(t=>{
+  return loadCloudsLive().then(t=>{
     if(t){ liveClouds = true; return t; }
     return loadTex(URLS.clouds);   // offline / blocked: fall back to a static NASA layer
   });
@@ -1263,8 +1330,8 @@ try{
     const cv=document.createElement('canvas'); cv.width=2; cv.height=256;
     const cx=cv.getContext('2d');
     const gr=cx.createLinearGradient(0, rev?256:0, 0, rev?0:256);
-    gr.addColorStop(0.0,'rgba(255,255,255,0.85)');
-    gr.addColorStop(0.55,'rgba(250,252,254,0.74)');
+    gr.addColorStop(0.0,'rgba(255,255,255,0.70)');
+    gr.addColorStop(0.55,'rgba(250,252,254,0.55)');
     gr.addColorStop(0.82,'rgba(246,249,252,0.38)');
     gr.addColorStop(1.0,'rgba(246,249,252,0)');
     cx.fillStyle=gr; cx.fillRect(0,0,2,256);
@@ -1272,7 +1339,7 @@ try{
   };
   const mkCap=function(north){
     const m=new THREE.MeshBasicMaterial({ map:capGrad(!north), transparent:true, depthWrite:false });
-    const g3=new THREE.SphereGeometry(1.0069, 48, 8, 0, Math.PI*2, north?0:(Math.PI-0.17), 0.17);
+    const g3=new THREE.SphereGeometry(1.0069, 48, 8, 0, Math.PI*2, north?0:(Math.PI-0.10), 0.10);
     const mesh=new THREE.Mesh(g3, m);
     earth.add(mesh);
     return mesh;
@@ -1541,9 +1608,8 @@ Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
 /* pull fresh satellite cloud cover every 3 hours */
 setInterval(()=>{
   if(!liveClouds) return;
-  loadTex(liveCloudURLs()).then(t=>{
+  loadCloudsLive().then(t=>{
     if(t){
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
       cloudUniforms.map.value = t;
       earthUniforms.cloudMap.value = t;
       buildStorms(t);
