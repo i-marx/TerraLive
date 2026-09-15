@@ -520,12 +520,13 @@ const earthMat = new THREE.ShaderMaterial({
       if(uHasSnow > 0.5){
         float sn = texture2D(snowMap, vUv).r;
         float wat2 = (uHasWater > 0.5) ? texture2D(waterMap, vUv).r : 0.0;
-        day = mix(day, vec3(0.60, 0.66, 0.75), sn * (1.0 - wat2*0.85) * 0.85);
+        day = mix(day, vec3(0.60, 0.66, 0.75), sn * (1.0 - wat2*0.97) * 0.85);
       }
       /* seasons at sea: real AMSR2 sea-ice concentration frosts the ocean */
       if(uHasIce > 0.5 && uHasWater > 0.5){
         float ic = texture2D(iceMap, vUv).r;
         float watI = texture2D(waterMap, vUv).r;
+        ic *= smoothstep(0.78, 0.86, abs(nGeo.y));
         day = mix(day, vec3(0.62, 0.68, 0.77), ic * watI * 0.70);
       }
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
@@ -1231,8 +1232,11 @@ try{
           p[i]=p[i+1]=p[i+2]=v; p[i+3]=255;
         }
         cx.putImageData(d,0,0);
+        /* double soft pass: no staircase edges at disk scale */
+        const sm2=document.createElement('canvas'); sm2.width=256; sm2.height=128;
+        const s2x=sm2.getContext('2d'); s2x.imageSmoothingEnabled=true; s2x.drawImage(cv,0,0,256,128);
         const up=document.createElement('canvas'); up.width=2048; up.height=1024;
-        const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(cv,0,0,2048,1024);
+        const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(sm2,0,0,2048,1024);
         cv.width=2048; cv.height=1024;
         cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0);
         const t=new THREE.CanvasTexture(cv);
@@ -1259,8 +1263,8 @@ try{
     const cv=document.createElement('canvas'); cv.width=2; cv.height=256;
     const cx=cv.getContext('2d');
     const gr=cx.createLinearGradient(0, rev?256:0, 0, rev?0:256);
-    gr.addColorStop(0.0,'rgba(255,255,255,0.96)');
-    gr.addColorStop(0.55,'rgba(250,252,254,0.88)');
+    gr.addColorStop(0.0,'rgba(255,255,255,0.85)');
+    gr.addColorStop(0.55,'rgba(250,252,254,0.74)');
     gr.addColorStop(0.82,'rgba(246,249,252,0.38)');
     gr.addColorStop(1.0,'rgba(246,249,252,0)');
     cx.fillStyle=gr; cx.fillRect(0,0,2,256);
