@@ -1335,7 +1335,7 @@ function updateExtras(gm, sd, mdU, illum){
     _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5);
   }
   _pFade = (_introP < 1) ? 0 : Math.min(1, _pFade + dt*0.5);
-  if(CFG.rot && CFG.mode === 'full' && _introP >= 1){ _spin += dt * 0.042; }
+  if(CFG.rot && _introP >= 1 && (CFG.mode === 'full' || CFG.mode === 'closeup')){ _spin += dt * 0.01047; }
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
@@ -1623,7 +1623,8 @@ function update(){
   const n = jdNow() - 2451545.0;
 
   /* Earth rotation: Greenwich meridian sits at RA = GMST */
-  const gm = gmstDeg(n) * D2R + _spin;
+  const gmR = gmstDeg(n) * D2R;
+  const gm = gmR + _spin;
   earth.rotation.y  = gm;
   /* live satellite clouds are already where they really are - no artificial drift */
   const drift = liveClouds ? (CFG.demo ? _demoE*0.045 : 0) : (n * 0.22) % (Math.PI*2);
@@ -1668,7 +1669,7 @@ function update(){
        (which co-rotates with the spin -> globe still, Sun sweeps). It looks
        toward the horizon so the surface fills the frame with the limb + space
        in the upper-left. Framing verified against ISS reference imagery. */
-    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gm));
+    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gmR));
     const E = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), Lp).normalize();
     const N = new THREE.Vector3().crossVectors(Lp, E);
     const az = CFG.cuAzimuth*D2R, ld = CFG.cuLookDown*D2R, roll = CFG.cuRoll*D2R;
