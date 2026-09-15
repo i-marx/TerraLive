@@ -27,7 +27,6 @@ class EarthWallpaperService : WallpaperService() {
         /* ---- motion parallax: accelerometer -> JS at UI rate, only while visible ---- */
         private var sensorManager: SensorManager? = null
         private var sensorOn = false
-        private var hiddenAt = 0L
         private val tiltListener = object : SensorEventListener {
             override fun onSensorChanged(e: SensorEvent) {
                 val wv = webView ?: return
@@ -54,7 +53,7 @@ class EarthWallpaperService : WallpaperService() {
 
         /* hot-swap the scene when the user picks another wallpaper in the app */
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION || key == Wallpapers.KEY_WAKE) {
+            if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION || key == Wallpapers.KEY_ROT) {
                 if (key == Wallpapers.KEY_MOTION) { stopTilt(); startTilt() }
                 webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
             }
@@ -91,14 +90,8 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            if (visible) {
-                webView?.onResume(); webView?.resumeTimers(); startTilt()
-                if (hiddenAt > 0L && System.currentTimeMillis() - hiddenAt > 45000L) {
-                    webView?.evaluateJavascript("window._terraWake&&_terraWake()", null)
-                }
-                hiddenAt = 0L
-            }
-            else { hiddenAt = System.currentTimeMillis(); stopTilt(); webView?.onPause(); webView?.pauseTimers() }
+            if (visible) { webView?.onResume(); webView?.resumeTimers(); startTilt() }
+            else { stopTilt(); webView?.onPause(); webView?.pauseTimers() }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
