@@ -1335,7 +1335,7 @@ function updateExtras(gm, sd, mdU, illum){
     _pjx += (_ptx-_pjx)*Math.min(1, dt*3.5); _pjy += (_pty-_pjy)*Math.min(1, dt*3.5);
   }
   _pFade = (_introP < 1) ? 0 : Math.min(1, _pFade + dt*0.5);
-  if(CFG.rot && CFG.mode === 'full' && _introP >= 1){ _spin += dt * 0.015; }
+  if(CFG.rot && CFG.mode === 'full' && _introP >= 1){ _spin += dt * 0.042; }
   /* moonlight uniforms */
   earthUniforms.uMoonDir.value.set(mdU[0], mdU[1], mdU[2]);
   earthUniforms.uMoonAmt.value=illum;
