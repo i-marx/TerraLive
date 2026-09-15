@@ -402,38 +402,99 @@ function liveCloudURLs(){  // cache-bust once per update window so new satellite
   const t = Math.floor(Date.now()/CFG.cloudRefresh);
   return URLS.cloudsLive.map(u=>u+'?t='+t);
 }
-/* The live cloud composite ships with real defects: saturated corrupt tile
+/* The live cloud composite ships with real defects: corrupt saturated tile
    blocks (hard staircase edges) and mirror-filled polar strips. Every download
-   is repaired here before it touches the globe. */
-function repairCloudCanvas(im){
-  const W=4096, H=2048;
+   is repaired: corrupt regions are detected (bright + textureless clusters)
+   and patched from the last known-good map cached on-device; with no cache
+   yet, they are softened in place. Clean maps refresh the cache. */
+function idbOpen(){ return new Promise(function(res){ try{ const r=indexedDB.open('terra',1); r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); }; r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }
+function idbGet(k){ return idbOpen().then(function(db){ if(!db) return null; return new Promise(function(res){ try{ const t=db.transaction('kv').objectStore('kv').get(k); t.onsuccess=function(){ res(t.result||null); }; t.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }); }
+function idbPut(k, v){ idbOpen().then(function(db){ if(!db) return; try{ db.transaction('kv','readwrite').objectStore('kv').put(v, k); }catch(e){} }); }
+function repairCloudCanvas(im, donor){
+  const W=4096, H=2048, B=16, BW=W/B, BH=H/B;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const cx=cv.getContext('2d');
   cx.drawImage(im, 0, 0, W, H);
   const dd=cx.getImageData(0, 0, W, H); const p=dd.data;
-  const inv=new Uint8Array(W*H);
-  for(let i=0, q=0; i<p.length; i+=4, q++){
-    if(p[i]>=251 && p[i+3]>=251) inv[q]=1;
-  }
-  const cvB=document.createElement('canvas'); cvB.width=W; cvB.height=H;
-  const bx=cvB.getContext('2d');
-  const db=bx.createImageData(W, H); const pb=db.data;
-  for(let i=0, q=0; i<p.length; i+=4, q++){
-    if(!inv[q]){ pb[i]=p[i]; pb[i+1]=p[i+1]; pb[i+2]=p[i+2]; pb[i+3]=p[i+3]; }
-  }
-  bx.putImageData(db, 0, 0);
-  const f1=document.createElement('canvas'); f1.width=64; f1.height=32;
-  const fx=f1.getContext('2d'); fx.imageSmoothingEnabled=true; fx.drawImage(cvB, 0, 0, 64, 32);
-  const f2=document.createElement('canvas'); f2.width=W; f2.height=H;
-  const gx=f2.getContext('2d'); gx.imageSmoothingEnabled=true; gx.drawImage(f1, 0, 0, W, H);
-  const df=gx.getImageData(0, 0, W, H); const pf=df.data;
-  for(let i=0, q=0; i<p.length; i+=4, q++){
-    if(inv[q]){
-      p[i]=pf[i]; p[i+1]=pf[i+1]; p[i+2]=pf[i+2];
-      p[i+3]=Math.round(pf[i+3]*0.85);
+  const meanArr=new Float32Array(BW*BH);
+  const flat=new Uint8Array(BW*BH);
+  for(let by=0; by<BH; by++) for(let bx2=0; bx2<BW; bx2++){
+    let sum=0, sum2=0, n=0;
+    for(let sy=2; sy<B; sy+=4) for(let sx=2; sx<B; sx+=4){
+      const idx=((by*B+sy)*W + (bx2*B+sx))*4;
+      const v=p[idx]*p[idx+3]/255;
+      sum+=v; sum2+=v*v; n++;
     }
+    const mean=sum/n;
+    meanArr[by*BW+bx2]=mean;
+    const sd=Math.sqrt(Math.max(0, sum2/n - mean*mean));
+    if(mean>243 && sd<1.8) flat[by*BW+bx2]=1;
   }
-  cx.putImageData(dd, 0, 0);
+  const lab=new Int32Array(BW*BH).fill(-1);
+  let keep=new Uint8Array(BW*BH);
+  let kept=0;
+  for(let s0=0; s0<BW*BH; s0++){
+    if(!flat[s0] || lab[s0]>=0) continue;
+    const stack=[s0]; lab[s0]=s0; const mem=[];
+    while(stack.length){
+      const c=stack.pop(); mem.push(c);
+      const cy=(c/BW)|0;
+      const nbs=[c-1, c+1, c-BW, c+BW];
+      for(let t2=0; t2<4; t2++){
+        const t=nbs[t2];
+        if(t<0 || t>=BW*BH) continue;
+        if((t===c-1 || t===c+1) && ((t/BW)|0)!==cy) continue;
+        if(flat[t] && lab[t]<0){ lab[t]=s0; stack.push(t); }
+      }
+    }
+    if(mem.length>=12){ for(let t2=0; t2<mem.length; t2++) keep[mem[t2]]=1; kept+=mem.length; }
+  }
+  for(let pass=0; pass<6; pass++){
+    const nk=new Uint8Array(keep);
+    for(let by=0; by<BH; by++) for(let bx2=0; bx2<BW; bx2++){
+      const q2=by*BW+bx2;
+      if(keep[q2] || meanArr[q2]<=140) continue;
+      if((bx2>0 && keep[q2-1]) || (bx2<BW-1 && keep[q2+1]) ||
+         (by>0 && keep[q2-BW]) || (by<BH-1 && keep[q2+BW])){ nk[q2]=1; kept++; }
+    }
+    keep=nk;
+  }
+  if(kept>0){
+    const mk=document.createElement('canvas'); mk.width=BW; mk.height=BH;
+    const mx=mk.getContext('2d');
+    const md=mx.createImageData(BW, BH);
+    for(let q2=0; q2<BW*BH; q2++){ const i=q2*4; md.data[i]=255; md.data[i+1]=255; md.data[i+2]=255; md.data[i+3]=keep[q2]?255:0; }
+    mx.putImageData(md, 0, 0);
+    const mkS=document.createElement('canvas'); mkS.width=96; mkS.height=48;
+    const msx=mkS.getContext('2d'); msx.imageSmoothingEnabled=true; msx.drawImage(mk, 0, 0, 96, 48);
+    const mkF=document.createElement('canvas'); mkF.width=W; mkF.height=H;
+    const mfx=mkF.getContext('2d'); mfx.imageSmoothingEnabled=true; mfx.drawImage(mkS, 0, 0, W, H);
+    const dm=mfx.getImageData(0, 0, W, H).data;
+    let pv=null;
+    if(donor){
+      const dc2=document.createElement('canvas'); dc2.width=W; dc2.height=H;
+      const dx2=dc2.getContext('2d'); dx2.imageSmoothingEnabled=true; dx2.drawImage(donor, 0, 0, W, H);
+      pv=dx2.getImageData(0, 0, W, H).data;
+    } else {
+      const s1=document.createElement('canvas'); s1.width=96; s1.height=48;
+      const s1x=s1.getContext('2d'); s1x.imageSmoothingEnabled=true; s1x.drawImage(cv, 0, 0, 96, 48);
+      const s2=document.createElement('canvas'); s2.width=W; s2.height=H;
+      const s2x=s2.getContext('2d'); s2x.imageSmoothingEnabled=true; s2x.drawImage(s1, 0, 0, W, H);
+      pv=s2x.getImageData(0, 0, W, H).data;
+    }
+    const donorScale=donor?1.0:0.92;
+    for(let i=0; i<p.length; i+=4){
+      const m=dm[i+3]/255;
+      if(m>0.01){
+        const vO=p[i]*p[i+3]/255;
+        const vP=pv[i]*pv[i+3]/255*donorScale;
+        const v=vO*(1-m)+vP*m;
+        p[i]=255; p[i+1]=255; p[i+2]=255;
+        p[i+3]=Math.round(v);
+      }
+    }
+    cx.putImageData(dd, 0, 0);
+  }
   /* soften the mirror-filled polar strips (above ~78 deg) */
   const yN=Math.round((12/180)*H);
   const smP=document.createElement('canvas'); smP.width=96; smP.height=yN;
@@ -444,7 +505,7 @@ function repairCloudCanvas(im){
   sxp.clearRect(0, 0, 96, yN);
   sxp.drawImage(cv, 0, H-yN, W, yN, 0, 0, 96, yN);
   cx.drawImage(smP, 0, 0, 96, yN, 0, H-yN, W, yN);
-  return cv;
+  return { cv: cv, frac: kept/(BW*BH) };
 }
 function texFromCloudCanvas(cv){
   const t=new THREE.CanvasTexture(cv);
@@ -458,11 +519,33 @@ function loadCloudsLive(){
   const urls=liveCloudURLs().slice().sort(function(a, b){
     return ((a.indexOf('4096')>=0)?-1:1) - ((b.indexOf('4096')>=0)?-1:1);
   });
+  const donorP=idbGet('clouds').then(function(bl){
+    if(!bl) return null;
+    return new Promise(function(res){
+      try{
+        const u=URL.createObjectURL(bl);
+        const im=new Image();
+        im.onload=function(){ res(im); };
+        im.onerror=function(){ res(null); };
+        im.src=u;
+      }catch(e){ res(null); }
+    });
+  }).catch(function(){ return null; });
   return new Promise(function(res){
     const tryOne=function(i){
       if(i>=urls.length){ res(null); return; }
       const im=new Image(); im.crossOrigin='anonymous';
-      im.onload=function(){ try{ res(texFromCloudCanvas(repairCloudCanvas(im))); }catch(e){ res(null); } };
+      im.onload=function(){
+        donorP.then(function(donor){
+          try{
+            const r=repairCloudCanvas(im, donor);
+            if(r.frac < 0.015){
+              try{ r.cv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); }catch(e){}
+            }
+            res(texFromCloudCanvas(r.cv));
+          }catch(e){ res(null); }
+        });
+      };
       im.onerror=function(){ tryOne(i+1); };
       im.src=urls[i];
     };
