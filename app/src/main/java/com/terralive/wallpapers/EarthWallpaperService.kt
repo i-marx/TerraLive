@@ -55,7 +55,7 @@ class EarthWallpaperService : WallpaperService() {
         private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == Wallpapers.KEY_SELECTED || key == Wallpapers.KEY_MODE || key == Wallpapers.KEY_LOCK || key == Wallpapers.KEY_LAT || key == Wallpapers.KEY_LON || key == Wallpapers.KEY_LOOK || key == Wallpapers.KEY_MOTION || key == Wallpapers.KEY_ROT) {
                 if (key == Wallpapers.KEY_MOTION) { stopTilt(); startTilt() }
-                webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
+                webView?.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)) + (if (isPreview) "&intro=0" else ""))
             }
         }
 
@@ -82,7 +82,7 @@ class EarthWallpaperService : WallpaperService() {
                 allowFileAccess = true
                 mediaPlaybackRequiresUserGesture = false
             }
-            wv.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)))
+            wv.loadUrl(Wallpapers.urlFor(this@EarthWallpaperService, Wallpapers.selected(this@EarthWallpaperService)) + (if (isPreview) "&intro=0" else ""))
             pres.setContentView(wv)
             pres.show()
             presentation = pres
