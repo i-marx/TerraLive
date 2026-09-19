@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r81';
+window._TERRA_REV = 'r82';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -732,6 +732,22 @@ function applyPolarCloudsTL(cv){ try{
     cx2.putImageData(dst,0,y0);
   };
   doP(_polarCld.n,true); doP(_polarCld.s,false);
+  /* exact-pole rows must be constant: flatten to wrap-safe row means */
+  const flat=function(north){ try{
+    const W=cv.width, H=cv.height, cx3=cv.getContext('2d');
+    const nR=Math.max(2,Math.round((1.5/180)*H));
+    const y0=north?0:H-nR;
+    const id3=cx3.getImageData(0,y0,W,nR), d3=id3.data;
+    for(let y=0;y<nR;y++){ let r=0,g=0,b=0,a2=0; const off=y*W*4;
+      for(let x=0;x<W;x++){ const o=off+x*4; r+=d3[o]; g+=d3[o+1]; b+=d3[o+2]; a2+=d3[o+3]; }
+      r/=W; g/=W; b/=W; a2/=W;
+      const dp=north? y : nR-1-y; const t3=1-Math.min(1, dp/nR);
+      for(let x=0;x<W;x++){ const o=off+x*4; const dth=(Math.random()-0.5)*2.5;
+        d3[o]  +=(r-d3[o])*t3+dth; d3[o+1]+=(g-d3[o+1])*t3+dth;
+        d3[o+2]+=(b-d3[o+2])*t3+dth; d3[o+3]+=(a2-d3[o+3])*t3; } }
+    cx3.putImageData(id3,0,y0);
+  }catch(e){} };
+  flat(true); flat(false);
 }catch(e){} }
 function fetchPolarClouds(){ try{
   const GA=9, GO=48;
@@ -1056,8 +1072,7 @@ const cloudMat = new THREE.ShaderMaterial({
       float a = pow(clamp((aRaw - 0.10) * 1.11, 0.0, 1.0), 0.85);
       /* fade clouds out toward the poles to kill the equirectangular
          starburst where the texture pinches at |lat| -> 90 */
-      float poleFade = smoothstep(0.9990, 0.9880, abs(n.y));
-      a *= poleFade;
+      /* pole fade removed: polar rows carry real model cloud data now */
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
       vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
@@ -1072,6 +1087,7 @@ const cloudMat = new THREE.ShaderMaterial({
       float ca2 = dot(n, sunDir);
       float tw2 = smoothstep(-0.22, 0.05, ca2) * (1.0 - smoothstep(0.05, 0.30, ca2));
       c += vec3(0.50, 0.29, 0.19) * tw2 * 0.40;
+      c += vec3(0.62, 0.74, 1.0) * 0.17 * pow(smoothstep(-0.12, 0.12, ca2), 1.4);
       c = pow(aces(c), vec3(1.0/2.2));
       /* keep night clouds fairly opaque so they read as shapes over the lights */
       float alpha = a * mix(0.80, 0.94, dm);
