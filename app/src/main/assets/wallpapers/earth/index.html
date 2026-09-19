@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r74';
+window._TERRA_REV = 'r75';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -467,10 +467,12 @@ function __zonalSmoothTL(cv, latStart, north){ try{
   for(let k=0;k<NB;k++){
     const bp=north?k:NB-1-k, r0=Math.round(yS*bp/NB), r1=Math.round(yS*(bp+1)/NB), bh=r1-r0; if(bh<=0)continue;
     const frac=k/(NB-1), tw=Math.max(1, Math.round(1+Math.pow(frac,1.8)*250));
-    tmp.width=tw; tmp.height=Math.max(1,bh);
+    tmp.width=tw*3; tmp.height=Math.max(1,bh);
     const tc=tmp.getContext('2d'); tc.imageSmoothingEnabled=true;
     tc.drawImage(st,0,r0,W,bh,0,0,tw,tmp.height);
-    sc.clearRect(0,r0,W,bh); sc.drawImage(tmp,0,0,tw,tmp.height,0,r0,W,bh);
+    tc.drawImage(st,0,r0,W,bh,tw,0,tw,tmp.height);
+    tc.drawImage(st,0,r0,W,bh,tw*2,0,tw,tmp.height);
+    sc.clearRect(0,r0,W,bh); sc.drawImage(tmp,tw,0,tw,tmp.height,0,r0,W,bh);
   }
   const vs=document.createElement('canvas'); vs.width=Math.min(1024,W); vs.height=Math.max(2,Math.round(yS/3));
   const vc2=vs.getContext('2d'); vc2.imageSmoothingEnabled=true;
@@ -1235,15 +1237,24 @@ function paintAurora(coords){
   }
   gx.putImageData(img,0,0);
   const W=512, H=256;
-  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-  const cx=cv.getContext('2d');
-  cx.imageSmoothingEnabled=true;
-  cx.drawImage(grid,0,0,W,H);
-  /* soften further: down-up resample */
-  const sm=document.createElement('canvas'); sm.width=96; sm.height=48;
+  /* wrap-aware smoothing: tile x3 so the +-180 ends meet seamlessly */
+  const t3=document.createElement('canvas'); t3.width=GW*3; t3.height=GH;
+  const t3x=t3.getContext('2d'); t3x.drawImage(grid,0,0); t3x.drawImage(grid,GW,0); t3x.drawImage(grid,GW*2,0);
+  const big=document.createElement('canvas'); big.width=W*3; big.height=H;
+  const bx=big.getContext('2d'); bx.imageSmoothingEnabled=true;
+  bx.drawImage(t3,0,0,GW*3,GH,0,0,W*3,H);
+  const sm=document.createElement('canvas'); sm.width=288; sm.height=48;
   const sx=sm.getContext('2d'); sx.imageSmoothingEnabled=true;
-  sx.drawImage(cv,0,0,96,48);
-  cx.clearRect(0,0,W,H); cx.drawImage(sm,0,0,W,H);
+  sx.drawImage(big,0,0,W*3,H,0,0,288,48);
+  bx.clearRect(0,0,W*3,H); bx.drawImage(sm,0,0,288,48,0,0,W*3,H);
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const cx=cv.getContext('2d'); cx.drawImage(big, W, 0, W, H, 0, 0, W, H);
+  /* polar convergence: aurora fades out cleanly at the exact poles */
+  (function(){ const id2=cx.getImageData(0,0,W,H), dd3=id2.data;
+    for(let y=0;y<6;y++){ const ff=y/6;
+      for(let x=0;x<W;x++){ const o=(y*W+x)*4; dd3[o]*=ff; dd3[o+1]*=ff; dd3[o+2]*=ff; }
+      const yb=H-1-y; for(let x=0;x<W;x++){ const o=(yb*W+x)*4; dd3[o]*=ff; dd3[o+1]*=ff; dd3[o+2]*=ff; } }
+    cx.putImageData(id2,0,0); })();
   /* curtain structure: value-noise rays + red poleward fringe */
   try{
     const vn=function(n,st){ const c2=Math.ceil(n/st)+2, pts=[]; for(let i=0;i<c2;i++) pts.push(Math.random());
@@ -1828,7 +1839,36 @@ loadRegional();
 
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
-  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __brightFillTL(_dc, 80.5, 85, 0.22); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt; }catch(e){ earthUniforms.dayMap.value = d; } }
+  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __brightFillTL(_dc, 80.5, 85, 0.22); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt;
+  /* real polar imagery: yesterday's VIIRS true-color strip (polar orbiters see the pole; geostationary cannot). Composites wherever VIIRS has sunlit data; the pre-painted continuation remains only above the seasonal data edge. */
+  (function(){ try{
+    const dts=new Date(Date.now()-86400000).toISOString().slice(0,10);
+    const i2=new Image(); i2.crossOrigin='anonymous';
+    i2.onload=function(){ try{
+      const th2=Math.round(2048*15/180);
+      const tmp2=document.createElement('canvas'); tmp2.width=4096; tmp2.height=th2;
+      const tc2=tmp2.getContext('2d'); tc2.imageSmoothingEnabled=true;
+      tc2.drawImage(i2,0,0,4096,342,0,0,4096,th2);
+      const dctx=_dc.getContext('2d');
+      const S2=tc2.getImageData(0,0,4096,th2), D2=dctx.getImageData(0,0,4096,th2);
+      const sa=S2.data, da=D2.data;
+      const yA=Math.round(2048*12/180), yB=Math.round(2048*13.5/180);
+      for(let y=0;y<th2;y++){
+        let a=1; if(y>yA) a=Math.max(0, 1-(y-yA)/(yB-yA));
+        if(a<=0) continue;
+        for(let x=0;x<4096;x++){ const o=(y*4096+x)*4;
+          const lum=(sa[o]+sa[o+1]+sa[o+2])/765; if(lum<=0.035) continue;
+          const w=a*Math.min(1,(lum-0.035)*12);
+          da[o]=Math.round(da[o]*(1-w)+sa[o]*w);
+          da[o+1]=Math.round(da[o+1]*(1-w)+sa[o+1]*w);
+          da[o+2]=Math.round(da[o+2]*(1-w)+sa[o+2]*w); }
+      }
+      dctx.putImageData(D2,0,0);
+      earthUniforms.dayMap.value.needsUpdate=true;
+    }catch(e){} };
+    i2.onerror=function(){};
+    i2.src='https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=&FORMAT=image/jpeg&BBOX=-180,75,180,90&WIDTH=4096&HEIGHT=342&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor&TIME='+dts;
+  }catch(e){} })(); }catch(e){ earthUniforms.dayMap.value = d; } }
   if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
   if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
