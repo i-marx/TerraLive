@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r79';
+window._TERRA_REV = 'r80';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -639,16 +639,16 @@ function repairCloudCanvas(im, donor){
     }
     cx.putImageData(dd, 0, 0);
   }
-  __polarConditionTL(cv,true,76,83); __polarConditionTL(cv,false,76,83); __poleFadeOutTL(cv, 80, 86, true); __poleFadeOutTL(cv, 80, 86, false);
+  try{ applyPolarCloudsTL(cv); }catch(e){} __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84);
   return { cv: cv, frac: kept/(BW*BH) };
 }
-function texFromCloudCanvas(cv){
+function texFromCloudCanvas(cv){ window._cloudCvRef=cv;
   const t=new THREE.CanvasTexture(cv);
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
   t.anisotropy=renderer.capabilities.getMaxAnisotropy();
   t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
   t.generateMipmaps=true;
-  return t;
+  window._cloudTexRef=t; return t;
 }
 function loadCloudsModel(){
   /* keyless model clouds (Open-Meteo): smooth but honest - emergency source */
@@ -685,6 +685,76 @@ function loadCloudsModel(){
     }catch(e){ res(null); }
   });
 }
+const _polarCld={n:null,s:null};
+function applyPolarCloudsTL(cv){ try{
+  const W=cv.width,H=cv.height,cx2=cv.getContext('2d');
+  const doP=function(store,north){ if(!store) return;
+    const GA=store.ga, GO=store.go, vals=store.v;
+    const latEdge=73, rows=Math.round((90-latEdge)/180*H);
+    const y0=north?0:H-rows;
+    const sm=document.createElement('canvas'); sm.width=GO*3; sm.height=GA;
+    const sx=sm.getContext('2d'); const idd=sx.createImageData(GO*3,GA);
+    for(let a2=0;a2<GA;a2++) for(let o=0;o<GO;o++){
+      const v=Math.min(100,Math.max(0,vals[a2*GO+o]||0));
+      for(let rep=0;rep<3;rep++){ const i2=((a2)*GO*3 + rep*GO + o)*4;
+        idd.data[i2]=255; idd.data[i2+1]=255; idd.data[i2+2]=255; idd.data[i2+3]=Math.round(v*2.4); } }
+    sx.putImageData(idd,0,0);
+    const up=document.createElement('canvas'); up.width=W; up.height=rows;
+    const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true;
+    ux.drawImage(sm, 0,0,GO*3,GA, -W, 0, W*3, rows);
+    const uid=ux.getImageData(0,0,W,rows), ud=uid.data;
+    const dst=cx2.getImageData(0,y0,W,rows), dd2=dst.data;
+    const p1=Math.random()*6.283, p2=Math.random()*6.283;
+    /* brightness-match model to the existing composite at the 73.5-75.5 overlap ring */
+    let em=0,en=0,mm=0,mn=0;
+    for(let y=0;y<rows;y++){
+      const gy=y0+y; const latAbs=north? 90-((gy+0.5)/H)*180 : ((gy+0.5)/H)*180-90;
+      if(latAbs<73.5||latAbs>75.5) continue;
+      const uy=north? y : rows-1-y;
+      for(let x=0;x<W;x+=4){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
+        em+=dd2[eo+3]; en++; mm+=ud[uo+3]; mn++; } }
+    let scale=1; if(mn>50 && mm/mn>2) scale=Math.min(1.6, Math.max(0.55, (em/Math.max(1,en))/(mm/mn)));
+    for(let y=0;y<rows;y++){
+      const gy=y0+y; const latAbs=north? 90-((gy+0.5)/H)*180 : ((gy+0.5)/H)*180-90;
+      let t2=(latAbs-73.5)/4.5; t2=Math.max(0,Math.min(1,t2)); t2=t2*t2*(3-2*t2);
+      if(t2<=0) continue;
+      const uy=north? y : rows-1-y;
+      for(let x=0;x<W;x++){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
+        const fx=x/W*6.28318;
+        const nz=1+0.13*(Math.sin(fx*6+p1)+Math.sin(fx*11+p2))*0.5;
+        const mA=Math.min(255, ud[uo+3]*scale*nz);
+        dd2[eo]  =Math.round(dd2[eo]  *(1-t2)+255*t2);
+        dd2[eo+1]=Math.round(dd2[eo+1]*(1-t2)+255*t2);
+        dd2[eo+2]=Math.round(dd2[eo+2]*(1-t2)+255*t2);
+        dd2[eo+3]=Math.round(dd2[eo+3]*(1-t2)+mA*t2); }
+    }
+    cx2.putImageData(dst,0,y0);
+  };
+  doP(_polarCld.n,true); doP(_polarCld.s,false);
+}catch(e){} }
+function fetchPolarClouds(){ try{
+  const GA=9, GO=48;
+  const mk=function(sign){ const lats=[], lons=[];
+    for(let a2=0;a2<GA;a2++) for(let o=0;o<GO;o++){
+      lats.push((sign*(89-a2*2)).toFixed(2));
+      lons.push((-180 + o*(360/GO) + 180/GO).toFixed(2)); }
+    return fetch('https://api.open-meteo.com/v1/forecast?latitude='+lats.join(',')+'&longitude='+lons.join(',')+'&current=cloud_cover')
+      .then(function(r){ return r.json(); })
+      .then(function(arr){ if(!Array.isArray(arr)) return null;
+        const v=new Float32Array(GA*GO);
+        for(let q=0;q<GA*GO;q++) v[q]=arr[q]&&arr[q].current? arr[q].current.cloud_cover : 0;
+        return {ga:GA, go:GO, v:v}; }); };
+  Promise.all([mk(1), mk(-1)]).then(function(ps){
+    if(ps[0]) _polarCld.n=ps[0]; if(ps[1]) _polarCld.s=ps[1];
+    try{ if((ps[0]||ps[1]) && window._cloudCvRef && window._cloudTexRef){
+      applyPolarCloudsTL(window._cloudCvRef);
+      __polarConditionTL(window._cloudCvRef,true,76,84);
+      __polarConditionTL(window._cloudCvRef,false,76,84);
+      window._cloudTexRef.needsUpdate=true; } }catch(e){}
+  }).catch(function(){});
+  setTimeout(fetchPolarClouds, 2*3600*1000);
+}catch(e){} }
+setTimeout(fetchPolarClouds, 2500);
 function loadCloudsLive(){
   const urls=liveCloudURLs().slice().sort(function(a, b){
     return ((a.indexOf('4096')>=0)?-1:1) - ((b.indexOf('4096')>=0)?-1:1);
