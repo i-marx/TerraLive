@@ -399,7 +399,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r68';
+window._TERRA_REV = 'r69';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1329,17 +1329,62 @@ try{
 
 /* ---- THE SUN: real position, blazing glare, correctly occluded by the globe ----
    (No fake ocean reflection. In close-up you catch true local sunrises.) */
-let sunCore=null, sunHalo=null;
+let sunCore=null, sunHalo=null, sunStreak=null, sunSpikesSp=null;
 try{
-  const gt=glowTexture();
-  const mkSun=(scale,op,r,g,b)=>{
-    const m=new THREE.SpriteMaterial({ map:gt, transparent:true, depthWrite:false,
-      blending:THREE.AdditiveBlending, color:new THREE.Color(r,g,b), opacity:op });
-    const sp=new THREE.Sprite(m); sp.scale.set(scale,scale,1); scene.add(sp);
+  const sunTex=(function(){
+    const cv=document.createElement('canvas'); cv.width=cv.height=512;
+    const cx=cv.getContext('2d');
+    const g1=cx.createRadialGradient(256,256,0,256,256,256);
+    g1.addColorStop(0.000,'rgba(255,255,255,1)');
+    g1.addColorStop(0.030,'rgba(255,255,255,1)');
+    g1.addColorStop(0.060,'rgba(255,252,244,0.92)');
+    g1.addColorStop(0.120,'rgba(255,241,214,0.55)');
+    g1.addColorStop(0.280,'rgba(255,219,160,0.20)');
+    g1.addColorStop(0.550,'rgba(255,196,128,0.07)');
+    g1.addColorStop(1.000,'rgba(255,180,110,0)');
+    cx.fillStyle=g1; cx.fillRect(0,0,512,512);
+    return new THREE.CanvasTexture(cv);
+  })();
+  const spikeTex=(function(){
+    const cv=document.createElement('canvas'); cv.width=cv.height=512;
+    const cx=cv.getContext('2d');
+    cx.translate(256,256);
+    for(let k=0;k<4;k++){
+      cx.save(); cx.rotate(k*Math.PI/2);
+      const lg=cx.createLinearGradient(0,0,250,0);
+      lg.addColorStop(0,'rgba(255,255,255,0.85)');
+      lg.addColorStop(0.25,'rgba(255,246,225,0.30)');
+      lg.addColorStop(1,'rgba(255,240,210,0)');
+      cx.fillStyle=lg;
+      cx.beginPath();
+      cx.moveTo(0,-5); cx.lineTo(250,-0.6); cx.lineTo(250,0.6); cx.lineTo(0,5);
+      cx.closePath(); cx.fill();
+      cx.restore();
+    }
+    return new THREE.CanvasTexture(cv);
+  })();
+  const streakTex=(function(){
+    const cv=document.createElement('canvas'); cv.width=1024; cv.height=64;
+    const cx=cv.getContext('2d');
+    const lg=cx.createLinearGradient(0,0,1024,0);
+    lg.addColorStop(0,'rgba(160,200,255,0)');
+    lg.addColorStop(0.5,'rgba(210,230,255,0.85)');
+    lg.addColorStop(1,'rgba(160,200,255,0)');
+    cx.fillStyle=lg;
+    cx.fillRect(0,24,1024,16);
+    cx.globalAlpha=0.5; cx.fillRect(0,16,1024,32); cx.globalAlpha=1;
+    return new THREE.CanvasTexture(cv);
+  })();
+  const mkS2=(tex,sx,sy,op)=>{
+    const m=new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false,
+      blending:THREE.AdditiveBlending, opacity:op });
+    const sp=new THREE.Sprite(m); sp.scale.set(sx,sy,1); scene.add(sp);
     return sp;
   };
-  sunCore=mkSun(64, 1.0, 1.0, 0.99, 0.94);
-  sunHalo=mkSun(260, 0.28, 1.0, 0.92, 0.78);
+  sunHalo=mkS2(sunTex, 320, 320, 0.9);
+  sunSpikesSp=mkS2(spikeTex, 300, 300, 0.42);
+  sunStreak=mkS2(streakTex, 620, 46, 0.20);
+  sunCore=mkS2(sunTex, 110, 110, 1.0);
 }catch(e){}
 
 /* ---- DEMO SELF-RECORDER: captures the canvas to a webm in Downloads ---- */
@@ -1545,6 +1590,8 @@ function updateExtras(gm, sd, mdU, illum){
     const R=CFG.starSphereR*0.94;
     sunCore.position.set(sd[0]*R, sd[1]*R, sd[2]*R);
     sunHalo.position.copy(sunCore.position);
+    if(sunStreak) sunStreak.position.copy(sunCore.position);
+    if(sunSpikesSp) sunSpikesSp.position.copy(sunCore.position);
   }
   /* lightning */
   const flashRate = CFG.demo ? 0.22 : 1.1;
