@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r80';
+window._TERRA_REV = 'r81';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -545,10 +545,10 @@ function __polarConditionTL(cv, north, latBlend, latConst){ try{
     let t; if(dp<=yC) t=1; else t=Math.max(0, 1-(dp-yC)/(yB-yC));
     t=t*t*(3-2*t); if(t<=0) continue;
     const off=y*W*4;
-    for(let x=0;x<W;x++){ const o=off+x*4;
-      d[o]  +=(mr[y]-d[o])*t;
-      d[o+1]+=(mg[y]-d[o+1])*t;
-      d[o+2]+=(mb[y]-d[o+2])*t;
+    for(let x=0;x<W;x++){ const o=off+x*4; const dth=(Math.random()-0.5)*2.6;
+      d[o]  +=(mr[y]-d[o])*t+dth;
+      d[o+1]+=(mg[y]-d[o+1])*t+dth;
+      d[o+2]+=(mb[y]-d[o+2])*t+dth;
       d[o+3]+=(ma[y]-d[o+3])*t; }
   }
   cx2.putImageData(id,0,y0);
@@ -639,7 +639,7 @@ function repairCloudCanvas(im, donor){
     }
     cx.putImageData(dd, 0, 0);
   }
-  try{ applyPolarCloudsTL(cv); }catch(e){} __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84);
+  try{ applyPolarCloudsTL(cv); }catch(e){} if(!(_polarCld.n||_polarCld.s)){ __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84); }
   return { cv: cv, frac: kept/(BW*BH) };
 }
 function texFromCloudCanvas(cv){ window._cloudCvRef=cv;
@@ -723,10 +723,11 @@ function applyPolarCloudsTL(cv){ try{
         const fx=x/W*6.28318;
         const nz=1+0.13*(Math.sin(fx*6+p1)+Math.sin(fx*11+p2))*0.5;
         const mA=Math.min(255, ud[uo+3]*scale*nz);
+        const dth=(Math.random()-0.5)*3;
         dd2[eo]  =Math.round(dd2[eo]  *(1-t2)+255*t2);
         dd2[eo+1]=Math.round(dd2[eo+1]*(1-t2)+255*t2);
         dd2[eo+2]=Math.round(dd2[eo+2]*(1-t2)+255*t2);
-        dd2[eo+3]=Math.round(dd2[eo+3]*(1-t2)+mA*t2); }
+        dd2[eo+3]=Math.max(0,Math.min(255,Math.round(dd2[eo+3]*(1-t2)+mA*t2+dth))); }
     }
     cx2.putImageData(dst,0,y0);
   };
@@ -748,8 +749,6 @@ function fetchPolarClouds(){ try{
     if(ps[0]) _polarCld.n=ps[0]; if(ps[1]) _polarCld.s=ps[1];
     try{ if((ps[0]||ps[1]) && window._cloudCvRef && window._cloudTexRef){
       applyPolarCloudsTL(window._cloudCvRef);
-      __polarConditionTL(window._cloudCvRef,true,76,84);
-      __polarConditionTL(window._cloudCvRef,false,76,84);
       window._cloudTexRef.needsUpdate=true; } }catch(e){}
   }).catch(function(){});
   setTimeout(fetchPolarClouds, 2*3600*1000);
