@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r82';
+window._TERRA_REV = 'r83';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -780,7 +780,21 @@ function loadCloudsLive(){
       try{
         const u=URL.createObjectURL(bl);
         const im=new Image();
-        im.onload=function(){ res(im); };
+        im.onload=function(){ (function(){ try{
+          const c9=document.createElement('canvas'); c9.width=1024; c9.height=512;
+          const x9=c9.getContext('2d'); x9.drawImage(im,0,0,1024,512);
+          const d9=x9.getImageData(0,0,1024,512).data;
+          let bad=0; const B9=8;
+          for(let by=0;by<64;by++) for(let bx=0;bx<128;bx++){
+            let s1=0,s2=0,n9=0;
+            for(let sy=1;sy<B9;sy+=3) for(let sx=1;sx<B9;sx+=3){
+              const idx=((by*B9+sy)*1024+(bx*B9+sx))*4; const v=d9[idx+3]; s1+=v; s2+=v*v; n9++; }
+            const mn=s1/n9, sd9=Math.sqrt(Math.max(0,s2/n9-mn*mn));
+            if(mn>243 && sd9<1.8) bad++;
+          }
+          if(bad>40){ try{ idbPut('clouds', null); }catch(e){} res(null); return; }
+        }catch(e){}
+        res(im); })(); };
         im.onerror=function(){ res(null); };
         im.src=u;
       }catch(e){ res(null); }
@@ -801,7 +815,7 @@ function loadCloudsLive(){
               window._cloudRetryOn = true;
               setTimeout(function(){ window._cloudRetryOn = false; try{ refreshClouds(); }catch(e){} }, 15*60*1000);
             }
-            if(r.frac > 0.18 && !donor){
+            if(r.frac > 0.06 && !donor){
               loadCloudsModel().then(function(mt){ res(mt || texFromCloudCanvas(r.cv)); });
               return;
             }
