@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r73';
+window._TERRA_REV = 'r74';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -437,7 +437,7 @@ function __despeckleTL(cv, rowsTop, minBlurLum){ try{
   const A2=cx2.getImageData(0,0,W,rowsTop), B2=uc.getImageData(0,0,W,rowsTop);
   const a=A2.data, b=B2.data;
   for(let i=0;i<a.length;i+=4){ const la=(a[i]+a[i+1]+a[i+2])/765, lb=(b[i]+b[i+1]+b[i+2])/765;
-    if(la<0.07 && lb>minBlurLum){ a[i]=b[i]; a[i+1]=b[i+1]; a[i+2]=b[i+2]; a[i+3]=Math.max(a[i+3],b[i+3]); } }
+    if(la<0.17 && lb>la+0.07){ a[i]=b[i]; a[i+1]=b[i+1]; a[i+2]=b[i+2]; a[i+3]=Math.max(a[i+3],b[i+3]); } }
   cx2.putImageData(A2,0,0);
 }catch(e){} }
 function __poleCapTL(cv, latStart, latFull, north){ try{
@@ -456,6 +456,66 @@ function __poleCapTL(cv, latStart, latFull, north){ try{
   gc.fillStyle=gr; gc.fillRect(0,0,1,yS);
   if(north){ gc.fillStyle=col; gc.fillRect(0,0,1,yF); } else { gc.fillStyle=col; gc.fillRect(0,yS-yF,1,yF); }
   cx2.drawImage(gcv, 0, 0, 1, yS, 0, north?0:H-yS, W, yS);
+}catch(e){} }
+function __zonalSmoothTL(cv, latStart, north){ try{
+  const W=cv.width, H=cv.height, cx2=cv.getContext('2d');
+  const yS=Math.round((90-latStart)/180*H);
+  const st=document.createElement('canvas'); st.width=W; st.height=yS;
+  const sc=st.getContext('2d'); sc.imageSmoothingEnabled=true;
+  sc.drawImage(cv, 0, north?0:H-yS, W, yS, 0, 0, W, yS);
+  const NB=8, tmp=document.createElement('canvas');
+  for(let k=0;k<NB;k++){
+    const bp=north?k:NB-1-k, r0=Math.round(yS*bp/NB), r1=Math.round(yS*(bp+1)/NB), bh=r1-r0; if(bh<=0)continue;
+    const frac=k/(NB-1), tw=Math.max(1, Math.round(1+Math.pow(frac,1.8)*250));
+    tmp.width=tw; tmp.height=Math.max(1,bh);
+    const tc=tmp.getContext('2d'); tc.imageSmoothingEnabled=true;
+    tc.drawImage(st,0,r0,W,bh,0,0,tw,tmp.height);
+    sc.clearRect(0,r0,W,bh); sc.drawImage(tmp,0,0,tw,tmp.height,0,r0,W,bh);
+  }
+  const vs=document.createElement('canvas'); vs.width=Math.min(1024,W); vs.height=Math.max(2,Math.round(yS/3));
+  const vc2=vs.getContext('2d'); vc2.imageSmoothingEnabled=true;
+  vc2.drawImage(st,0,0,W,yS,0,0,vs.width,vs.height);
+  sc.globalAlpha=0.6; sc.drawImage(vs,0,0,vs.width,vs.height,0,0,W,yS); sc.globalAlpha=1;
+  cx2.drawImage(st,0,0,W,yS,0,north?0:H-yS,W,yS);
+}catch(e){} }
+function __poleFadeOutTL(cv, latStart, latClear, north){ try{
+  const W=cv.width, H=cv.height, cx2=cv.getContext('2d');
+  const yS=Math.round((90-latStart)/180*H), yC=Math.round((90-latClear)/180*H);
+  cx2.save(); cx2.globalCompositeOperation='destination-out';
+  const gr=cx2.createLinearGradient(0, north?yS:H-yS, 0, north?yC:H-yC);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,1)');
+  cx2.fillStyle=gr;
+  if(north){ cx2.fillRect(0,yC,W,yS-yC); cx2.fillStyle='rgba(0,0,0,1)'; cx2.fillRect(0,0,W,yC); }
+  else { cx2.fillRect(0,H-yS,W,yS-yC); cx2.fillStyle='rgba(0,0,0,1)'; cx2.fillRect(0,H-yC,W,yC); }
+  cx2.restore();
+}catch(e){} }
+function __brightFillTL(cv, latStart, latFull, lumMin){ try{
+  const W=cv.width, H=cv.height, cx2=cv.getContext('2d');
+  const yS=Math.round((90-latStart)/180*H), yF=Math.round((90-latFull)/180*H);
+  const row=cx2.getImageData(0,yS,W,3).data;
+  let r=0,g=0,b=0,n=0;
+  for(let i=0;i<row.length;i+=4){ const lum=(row[i]+row[i+1]+row[i+2])/765;
+    if(lum>lumMin){ r+=row[i]; g+=row[i+1]; b+=row[i+2]; n++; } }
+  if(n>50){ r=Math.round(r/n); g=Math.round(g/n); b=Math.round(b/n); } else { r=142; g=150; b=160; }
+  const gcv=document.createElement('canvas'); gcv.width=1; gcv.height=yS;
+  const gc=gcv.getContext('2d');
+  const gr=gc.createLinearGradient(0,yS,0,yF);
+  gr.addColorStop(0,'rgba('+r+','+g+','+b+',0)'); gr.addColorStop(1,'rgba('+r+','+g+','+b+',1)');
+  gc.fillStyle=gr; gc.fillRect(0,0,1,yS);
+  gc.fillStyle='rgb('+r+','+g+','+b+')'; gc.fillRect(0,0,1,yF);
+  cx2.drawImage(gcv,0,0,1,yS,0,0,W,yS);
+}catch(e){} }
+function __iceFloorTL(cv, latFull, latStart, floorV){ try{
+  const W=cv.width, H=cv.height, cx2=cv.getContext('2d');
+  const yF=Math.round((90-latFull)/180*H), yS=Math.round((90-latStart)/180*H);
+  const id=cx2.getImageData(0,0,W,yS), d=id.data;
+  for(let y=0;y<yS;y++){
+    const ramp = y>=yF ? (yS-y)/(yS-yF) : 1;
+    const fl=floorV*Math.min(1,Math.max(0,ramp));
+    for(let x=0;x<W;x++){ const o=(y*W+x)*4; const v=Math.max(d[o],fl);
+      d[o]=v; d[o+1]=v; d[o+2]=v; }
+  }
+  cx2.putImageData(id,0,0);
 }catch(e){} }
 function repairCloudCanvas(im, donor){
   const W=4096, H=2048, B=16, BW=W/B, BH=H/B;
@@ -531,7 +591,7 @@ function repairCloudCanvas(im, donor){
     }
     cx.putImageData(dd, 0, 0);
   }
-  __poleCapTL(cv, 80, 85, true); __poleCapTL(cv, 80, 85, false);
+  __zonalSmoothTL(cv, 78, true); __zonalSmoothTL(cv, 78, false); __poleFadeOutTL(cv, 80, 86, true); __poleFadeOutTL(cv, 80, 86, false);
   return { cv: cv, frac: kept/(BW*BH) };
 }
 function texFromCloudCanvas(cv){
@@ -1487,7 +1547,7 @@ try{
         const up=document.createElement('canvas'); up.width=2048; up.height=1024;
         const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(sm2,0,0,2048,1024);
         cv.width=2048; cv.height=1024;
-        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0); __despeckleTL(cv, Math.round(cv.height*30/180), 0.10); __poleCapTL(cv, 87.6, 89, true); 
+        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0); __despeckleTL(cv, Math.round(cv.height*30/180), 0.10); __zonalSmoothTL(cv, 79, true); __poleCapTL(cv, 87.6, 89, true); __iceFloorTL(cv, 87, 85.5, 175); 
         const t=new THREE.CanvasTexture(cv);
         t.wrapS=THREE.RepeatWrapping;
         t.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -1768,7 +1828,7 @@ loadRegional();
 
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
-  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __poleCapTL(_dc, 80.5, 85, true); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt; }catch(e){ earthUniforms.dayMap.value = d; } }
+  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __brightFillTL(_dc, 80.5, 85, 0.22); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt; }catch(e){ earthUniforms.dayMap.value = d; } }
   if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
   if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
