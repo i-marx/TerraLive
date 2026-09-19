@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r77';
+window._TERRA_REV = 'r78';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -537,6 +537,9 @@ function __polarConditionTL(cv, north, latBlend, latConst){ try{
   for(let p=0;p<3;p++){ const arrs=[mr,mg,mb,ma];
     for(let ai=0;ai<4;ai++){ const arr=arrs[ai], cp=arr.slice();
       for(let y=0;y<rows;y++){ let s2=0,n=0; for(let k=-4;k<=4;k++){ const yy=y+k; if(yy<0||yy>=rows) continue; s2+=cp[yy]; n++; } arr[y]=s2/n; } } }
+  { const refIdx = north? Math.min(rows-1,yC) : Math.max(0,rows-1-yC);
+    for(let y=0;y<rows;y++){ const dp=north?y:rows-1-y;
+      if(dp<yC){ mr[y]=mr[refIdx]; mg[y]=mg[refIdx]; mb[y]=mb[refIdx]; ma[y]=ma[refIdx]; } } }
   for(let y=0;y<rows;y++){
     const dp = north? y : rows-1-y;
     let t; if(dp<=yC) t=1; else t=Math.max(0, 1-(dp-yC)/(yB-yC));
@@ -1602,7 +1605,7 @@ try{
         const up=document.createElement('canvas'); up.width=2048; up.height=1024;
         const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(sm2,0,0,2048,1024);
         cv.width=2048; cv.height=1024;
-        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0); __despeckleTL(cv, Math.round(cv.height*30/180), 0.10); __polarConditionTL(cv,true,78,85); __iceFloorTL(cv, 87, 85.5, 175); __polarConditionTL(cv,false,78,85); 
+        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0); __despeckleTL(cv, Math.round(cv.height*30/180), 0.10); __iceFloorTL(cv, 87, 85.5, 175); __polarConditionTL(cv,true,78,85); __polarConditionTL(cv,false,78,85); 
         const t=new THREE.CanvasTexture(cv);
         t.wrapS=THREE.RepeatWrapping;
         t.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -1883,7 +1886,7 @@ loadRegional();
 
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
-  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __brightFillTL(_dc, 80.5, 85, 0.22); __brightFillSouthTL(_dc, -80.5, -85, 0.22); __polarConditionTL(_dc,true,78,84); __polarConditionTL(_dc,false,78,84); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt;
+  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __polarConditionTL(_dc,true,78,84); __polarConditionTL(_dc,false,78,84); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt;
   /* real polar imagery: yesterday's VIIRS true-color strip (polar orbiters see the pole; geostationary cannot). Composites wherever VIIRS has sunlit data; the pre-painted continuation remains only above the seasonal data edge. */
   (function(){ try{
     const dts=new Date(Date.now()-86400000).toISOString().slice(0,10);
