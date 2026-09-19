@@ -399,7 +399,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r69';
+window._TERRA_REV = 'r70';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1332,47 +1332,28 @@ try{
 let sunCore=null, sunHalo=null, sunStreak=null, sunSpikesSp=null;
 try{
   const sunTex=(function(){
-    const cv=document.createElement('canvas'); cv.width=cv.height=512;
+    const S=1024, c=S/2;
+    const cv=document.createElement('canvas'); cv.width=cv.height=S;
     const cx=cv.getContext('2d');
-    const g1=cx.createRadialGradient(256,256,0,256,256,256);
-    g1.addColorStop(0.000,'rgba(255,255,255,1)');
-    g1.addColorStop(0.030,'rgba(255,255,255,1)');
-    g1.addColorStop(0.060,'rgba(255,252,244,0.92)');
-    g1.addColorStop(0.120,'rgba(255,241,214,0.55)');
-    g1.addColorStop(0.280,'rgba(255,219,160,0.20)');
-    g1.addColorStop(0.550,'rgba(255,196,128,0.07)');
-    g1.addColorStop(1.000,'rgba(255,180,110,0)');
-    cx.fillStyle=g1; cx.fillRect(0,0,512,512);
-    return new THREE.CanvasTexture(cv);
-  })();
-  const spikeTex=(function(){
-    const cv=document.createElement('canvas'); cv.width=cv.height=512;
-    const cx=cv.getContext('2d');
-    cx.translate(256,256);
-    for(let k=0;k<4;k++){
-      cx.save(); cx.rotate(k*Math.PI/2);
-      const lg=cx.createLinearGradient(0,0,250,0);
-      lg.addColorStop(0,'rgba(255,255,255,0.85)');
-      lg.addColorStop(0.25,'rgba(255,246,225,0.30)');
-      lg.addColorStop(1,'rgba(255,240,210,0)');
-      cx.fillStyle=lg;
-      cx.beginPath();
-      cx.moveTo(0,-5); cx.lineTo(250,-0.6); cx.lineTo(250,0.6); cx.lineTo(0,5);
-      cx.closePath(); cx.fill();
-      cx.restore();
+    const g1=cx.createRadialGradient(c,c,0,c,c,c);
+    g1.addColorStop(0.00,'rgba(255,255,255,1)');
+    g1.addColorStop(0.11,'rgba(255,255,255,1)');
+    g1.addColorStop(0.17,'rgba(255,255,253,0.82)');
+    g1.addColorStop(0.27,'rgba(255,251,244,0.42)');
+    g1.addColorStop(0.43,'rgba(255,243,226,0.15)');
+    g1.addColorStop(0.63,'rgba(255,231,202,0.05)');
+    g1.addColorStop(1.00,'rgba(255,222,188,0)');
+    cx.fillStyle=g1; cx.fillRect(0,0,S,S);
+    cx.globalCompositeOperation='lighter';
+    const rnd=(a,b)=>a+Math.random()*(b-a);
+    for(let i=0;i<6;i++){
+      const ox2=c+rnd(-55,55), oy2=c+rnd(-55,55), rr=rnd(260,440);
+      const gl=cx.createRadialGradient(ox2,oy2,0,ox2,oy2,rr);
+      gl.addColorStop(0,'rgba(255,253,248,'+rnd(0.05,0.11).toFixed(3)+')');
+      gl.addColorStop(1,'rgba(255,248,238,0)');
+      cx.fillStyle=gl;
+      cx.beginPath(); cx.arc(ox2,oy2,rr,0,6.2832); cx.fill();
     }
-    return new THREE.CanvasTexture(cv);
-  })();
-  const streakTex=(function(){
-    const cv=document.createElement('canvas'); cv.width=1024; cv.height=64;
-    const cx=cv.getContext('2d');
-    const lg=cx.createLinearGradient(0,0,1024,0);
-    lg.addColorStop(0,'rgba(160,200,255,0)');
-    lg.addColorStop(0.5,'rgba(210,230,255,0.85)');
-    lg.addColorStop(1,'rgba(160,200,255,0)');
-    cx.fillStyle=lg;
-    cx.fillRect(0,24,1024,16);
-    cx.globalAlpha=0.5; cx.fillRect(0,16,1024,32); cx.globalAlpha=1;
     return new THREE.CanvasTexture(cv);
   })();
   const mkS2=(tex,sx,sy,op)=>{
@@ -1381,10 +1362,8 @@ try{
     const sp=new THREE.Sprite(m); sp.scale.set(sx,sy,1); scene.add(sp);
     return sp;
   };
-  sunHalo=mkS2(sunTex, 320, 320, 0.9);
-  sunSpikesSp=mkS2(spikeTex, 300, 300, 0.42);
-  sunStreak=mkS2(streakTex, 620, 46, 0.20);
-  sunCore=mkS2(sunTex, 110, 110, 1.0);
+  sunHalo=mkS2(sunTex, 420, 420, 0.85);
+  sunCore=mkS2(sunTex, 165, 165, 1.0);
 }catch(e){}
 
 /* ---- DEMO SELF-RECORDER: captures the canvas to a webm in Downloads ---- */
@@ -1667,7 +1646,7 @@ function updateExtras(gm, sd, mdU, illum){
       if(_glareV.z < 1){
         const axg=Math.abs(_glareV.x), ayg=Math.abs(_glareV.y);
         const inF=Math.max(0, 1.5 - Math.max(axg, ayg))/1.5;
-        op=Math.pow(Math.min(1,inF), 1.6)*0.34;
+        op=Math.pow(Math.min(1,inF), 1.6)*0.42;
         gx=(_glareV.x*0.5+0.5)*100; gy=(-_glareV.y*0.5+0.5)*100;
       }
     }
