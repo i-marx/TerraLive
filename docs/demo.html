@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r72';
+window._TERRA_REV = 'r73';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -426,6 +426,37 @@ function liveCloudURLs(){  // cache-bust once per update window so new satellite
 function idbOpen(){ return new Promise(function(res){ try{ const r=indexedDB.open('terra',1); r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); }; r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }
 function idbGet(k){ return idbOpen().then(function(db){ if(!db) return null; return new Promise(function(res){ try{ const t=db.transaction('kv').objectStore('kv').get(k); t.onsuccess=function(){ res(t.result||null); }; t.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }); }
 function idbPut(k, v){ idbOpen().then(function(db){ if(!db) return; try{ db.transaction('kv','readwrite').objectStore('kv').put(v, k); }catch(e){} }); }
+function __despeckleTL(cv, rowsTop, minBlurLum){ try{
+  const W=cv.width, cx2=cv.getContext('2d');
+  const bl=document.createElement('canvas'); bl.width=512; bl.height=Math.max(2,Math.round(rowsTop/8));
+  const bc=bl.getContext('2d'); bc.imageSmoothingEnabled=true;
+  bc.drawImage(cv,0,0,W,rowsTop,0,0,bl.width,bl.height);
+  const up=document.createElement('canvas'); up.width=W; up.height=rowsTop;
+  const uc=up.getContext('2d'); uc.imageSmoothingEnabled=true;
+  uc.drawImage(bl,0,0,bl.width,bl.height,0,0,W,rowsTop);
+  const A2=cx2.getImageData(0,0,W,rowsTop), B2=uc.getImageData(0,0,W,rowsTop);
+  const a=A2.data, b=B2.data;
+  for(let i=0;i<a.length;i+=4){ const la=(a[i]+a[i+1]+a[i+2])/765, lb=(b[i]+b[i+1]+b[i+2])/765;
+    if(la<0.07 && lb>minBlurLum){ a[i]=b[i]; a[i+1]=b[i+1]; a[i+2]=b[i+2]; a[i+3]=Math.max(a[i+3],b[i+3]); } }
+  cx2.putImageData(A2,0,0);
+}catch(e){} }
+function __poleCapTL(cv, latStart, latFull, north){ try{
+  const W=cv.width, H=cv.height, cx2=cv.getContext('2d');
+  const yS=Math.round((90-latStart)/180*H), yF=Math.round((90-latFull)/180*H);
+  const one=document.createElement('canvas'); one.width=1; one.height=1;
+  const oc=one.getContext('2d'); oc.imageSmoothingEnabled=true;
+  oc.drawImage(cv, 0, north?yS:H-yS-3, W, 3, 0, 0, 1, 1);
+  const px=oc.getImageData(0,0,1,1).data;
+  const col='rgba('+px[0]+','+px[1]+','+px[2]+','+(px[3]/255)+')';
+  const gcv=document.createElement('canvas'); gcv.width=1; gcv.height=yS;
+  const gc=gcv.getContext('2d');
+  const gr=gc.createLinearGradient(0, north?yS:0, 0, north?yF:yS-yF);
+  gr.addColorStop(0, 'rgba('+px[0]+','+px[1]+','+px[2]+',0)');
+  gr.addColorStop(1, col);
+  gc.fillStyle=gr; gc.fillRect(0,0,1,yS);
+  if(north){ gc.fillStyle=col; gc.fillRect(0,0,1,yF); } else { gc.fillStyle=col; gc.fillRect(0,yS-yF,1,yF); }
+  cx2.drawImage(gcv, 0, 0, 1, yS, 0, north?0:H-yS, W, yS);
+}catch(e){} }
 function repairCloudCanvas(im, donor){
   const W=4096, H=2048, B=16, BW=W/B, BH=H/B;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
@@ -500,15 +531,7 @@ function repairCloudCanvas(im, donor){
     }
     cx.putImageData(dd, 0, 0);
   }
-  const yN=Math.round((12/180)*H);
-  const smP=document.createElement('canvas'); smP.width=96; smP.height=yN;
-  const sxp=smP.getContext('2d'); sxp.imageSmoothingEnabled=true;
-  cx.imageSmoothingEnabled=true;
-  sxp.drawImage(cv, 0, 0, W, yN, 0, 0, 96, yN);
-  cx.drawImage(smP, 0, 0, 96, yN, 0, 0, W, yN);
-  sxp.clearRect(0, 0, 96, yN);
-  sxp.drawImage(cv, 0, H-yN, W, yN, 0, 0, 96, yN);
-  cx.drawImage(smP, 0, 0, 96, yN, 0, H-yN, W, yN);
+  __poleCapTL(cv, 80, 85, true); __poleCapTL(cv, 80, 85, false);
   return { cv: cv, frac: kept/(BW*BH) };
 }
 function texFromCloudCanvas(cv){
@@ -724,7 +747,8 @@ const earthMat = new THREE.ShaderMaterial({
         float ic = texture2D(iceMap, vUv).r;
         float watI = texture2D(waterMap, vUv).r;
         ic *= smoothstep(0.78, 0.86, abs(nGeo.y));
-        day = mix(day, vec3(0.62, 0.68, 0.77), ic * watI * 0.70);
+        ic *= 0.82 + 0.30*hash21(vUv*1800.0);
+        day = mix(day, vec3(0.84, 0.87, 0.91), min(1.0, ic*1.15) * watI * 0.88);
       }
       vec3 sunCol = vec3(1.0, 0.97, 0.93);
       vec3 col = day * sunCol * (daylight * 2.7 + 0.0012);
@@ -1206,7 +1230,7 @@ try{
         float rr=clamp(am.r/max(am.g,0.01),0.0,0.9);
         a=smoothstep(0.03, 0.9, a);
         vec3 n=normalize(vN); vec3 vd=normalize(cameraPosition-vWP);
-        float night=smoothstep(0.06,-0.10,dot(n,sunDir));
+        float night=smoothstep(0.00,-0.14,dot(n,sunDir)); night*=night;
         float limb=pow(1.0-max(dot(n,vd),0.0),1.4);
         vec3 col=vec3(0.12,1.0,0.45)*a + vec3(0.50,0.15,0.80)*a*a*0.65;
         col=mix(col, vec3(1.0,0.22,0.28)*(0.55+0.45*a), rr*0.62);
@@ -1463,7 +1487,7 @@ try{
         const up=document.createElement('canvas'); up.width=2048; up.height=1024;
         const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true; ux.drawImage(sm2,0,0,2048,1024);
         cv.width=2048; cv.height=1024;
-        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0);
+        cx.imageSmoothingEnabled=true; cx.drawImage(up,0,0); __despeckleTL(cv, Math.round(cv.height*30/180), 0.10); __poleCapTL(cv, 87.6, 89, true); 
         const t=new THREE.CanvasTexture(cv);
         t.wrapS=THREE.RepeatWrapping;
         t.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -1483,27 +1507,6 @@ try{
 
 /* ---- POLE CAPS: soft covers over the equirect pinch (hole + stretch marks) ---- */
 let _capN=null, _capS=null;
-try{
-  const capGrad=function(rev){
-    const cv=document.createElement('canvas'); cv.width=2; cv.height=256;
-    const cx=cv.getContext('2d');
-    const gr=cx.createLinearGradient(0, rev?256:0, 0, rev?0:256);
-    gr.addColorStop(0.0,'rgba(255,255,255,0.70)');
-    gr.addColorStop(0.55,'rgba(250,252,254,0.55)');
-    gr.addColorStop(0.82,'rgba(246,249,252,0.38)');
-    gr.addColorStop(1.0,'rgba(246,249,252,0)');
-    cx.fillStyle=gr; cx.fillRect(0,0,2,256);
-    return new THREE.CanvasTexture(cv);
-  };
-  const mkCap=function(north){
-    const m=new THREE.MeshBasicMaterial({ map:capGrad(!north), transparent:true, depthWrite:false });
-    const g3=new THREE.SphereGeometry(1.0069, 48, 8, 0, Math.PI*2, north?0:(Math.PI-0.10), 0.10);
-    const mesh=new THREE.Mesh(g3, m);
-    earth.add(mesh);
-    return mesh;
-  };
-  _capN=mkCap(true); _capS=mkCap(false);
-}catch(e){}
 
 /* ---- DIVE STARS: volumetric field you fly through during the intro ---- */
 let _diveStars=null;
@@ -1612,15 +1615,7 @@ function updateExtras(gm, sd, mdU, illum){
   }
   
   /* pole caps follow the real sunlight */
-  if(_capN && _capS){
-    const smst=function(a,b,x){ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-    const dN=smst(-0.12, 0.15, sd[1]);
-    const lnP=0.06 + 0.94*dN;
-    _capN.material.color.setRGB(lnP, lnP, Math.min(1,lnP*1.03));
-    const dS=smst(-0.12, 0.15, -sd[1]);
-    const lsP=0.06 + 0.94*dS;
-    _capS.material.color.setRGB(lsP, lsP, Math.min(1,lsP*1.03));
-  }
+  
   /* sun glare: blooms at the true screen position of the Sun, occlusion-aware */
   if(_glare){
     let op=0, gx=50, gy=50;
@@ -1773,7 +1768,7 @@ loadRegional();
 
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
-  if(d){ earthUniforms.dayMap.value = d; }
+  if(d){ try{ const _dc=document.createElement('canvas'); _dc.width=4096; _dc.height=2048; _dc.getContext('2d').drawImage(d.image,0,0,4096,2048); __despeckleTL(_dc, Math.round((22/180)*2048), 0.14); __poleCapTL(_dc, 80.5, 85, true); const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT; earthUniforms.dayMap.value=_dt; }catch(e){ earthUniforms.dayMap.value = d; } }
   if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
   if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
