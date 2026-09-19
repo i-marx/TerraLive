@@ -370,6 +370,7 @@ const URLS = {
           'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-water.png'],
   topo: ['https://unpkg.com/three-globe/example/img/earth-topology.png',
          'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png'],
+  sky: ['https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/2294472375_24a3b8ef46_o.jpg'],
   /* REAL near-realtime cloud cover from EUMETSAT/NOAA satellites (clouds.matteason.co.uk) */
   cloudsLive: ['https://clouds.matteason.co.uk/images/8192x4096/clouds-alpha.png',
                'https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png',
@@ -397,7 +398,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r66';
+window._TERRA_REV = 'r67';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -576,6 +577,10 @@ function loadCloudsLive(){
             const r=repairCloudCanvas(im, donor);
             if(r.frac < 0.02){
               try{ r.cv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); }catch(e){}
+            }
+            if(r.frac > 0.02 && !window._cloudRetryOn){
+              window._cloudRetryOn = true;
+              setTimeout(function(){ window._cloudRetryOn = false; try{ refreshClouds(); }catch(e){} }, 15*60*1000);
             }
             if(r.frac > 0.18 && !donor){
               loadCloudsModel().then(function(mt){ res(mt || texFromCloudCanvas(r.cv)); });
@@ -1631,6 +1636,65 @@ function updateExtras(gm, sd, mdU, illum){
   }
 }
 
+/* ---------- DEEP SKY: real Milky Way panorama + real star clusters ---------- */
+try{
+  CFG.expo = 1;
+  try{ const qq=new URLSearchParams(location.search); if(qq.has('expo')){ const ev=parseFloat(qq.get('expo')); if(isFinite(ev)) CFG.expo=Math.max(0.2, Math.min(2.5, ev)); } }catch(e){}
+  const skyL=new THREE.TextureLoader();
+  skyL.setCrossOrigin('anonymous');
+  skyL.load(URLS.sky[0], function(t){
+    try{
+      t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+      const m=new THREE.MeshBasicMaterial({ map:t, side:THREE.BackSide, transparent:true,
+        opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false });
+      const sph=new THREE.Mesh(new THREE.SphereGeometry(3200, 48, 32), m);
+      const gc=radecToArr(266.405, -28.936);
+      const gp=radecToArr(192.859, 27.128);
+      const vx=new THREE.Vector3(gc[0], gc[1], gc[2]).normalize();
+      const vyT=new THREE.Vector3(gp[0], gp[1], gp[2]).normalize();
+      const vz=new THREE.Vector3().crossVectors(vx, vyT).normalize();
+      const vy=new THREE.Vector3().crossVectors(vz, vx).normalize();
+      const bmx=new THREE.Matrix4().makeBasis(vx, vy, vz);
+      sph.quaternion.setFromRotationMatrix(bmx);
+      scene.add(sph);
+      let op=0;
+      const tgt=0.34*CFG.expo;
+      const fad=setInterval(function(){ op+=0.02; if(op>=tgt){ op=tgt; clearInterval(fad); } m.opacity=op; }, 120);
+    }catch(e){}
+  });
+}catch(e){}
+try{
+  const CLUSTERS=[
+    [56.75, 24.12, 60, 1.1, 6, 0.9],
+    [66.75, 15.87, 40, 2.4, 6, 0.7],
+    [130.1, 19.67, 45, 1.0, 5, 0.7],
+    [34.75, 57.13, 70, 0.9, 5, 0.8],
+    [250.42, 36.46, 80, 0.5, 4, 0.8],
+    [201.7, -47.48, 90, 0.6, 5, 0.9],
+    [6.02, -72.08, 80, 0.5, 4, 0.8],
+    [268.5, -34.8, 50, 1.2, 5, 0.7]
+  ];
+  const gtc=glowTexture();
+  for(const cl of CLUSTERS){
+    const g=new THREE.BufferGeometry();
+    const pos=new Float32Array(cl[2]*3);
+    const base=radecToArr(cl[0], cl[1]);
+    const bv=new THREE.Vector3(base[0], base[1], base[2]).normalize();
+    const t1=new THREE.Vector3(0,1,0).cross(bv).normalize();
+    const t2=new THREE.Vector3().crossVectors(bv, t1);
+    for(let i=0;i<cl[2];i++){
+      const r1=(Math.random()+Math.random()+Math.random()-1.5)/1.5*cl[3]*Math.PI/180;
+      const r2=(Math.random()+Math.random()+Math.random()-1.5)/1.5*cl[3]*Math.PI/180;
+      const dv=bv.clone().addScaledVector(t1, r1).addScaledVector(t2, r2).normalize();
+      pos[i*3]=dv.x*3000; pos[i*3+1]=dv.y*3000; pos[i*3+2]=dv.z*3000;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mm=new THREE.PointsMaterial({ map:gtc, color:0xdfe8ff, size:cl[4], sizeAttenuation:false,
+      transparent:true, opacity:cl[5]*0.75, depthWrite:false, blending:THREE.AdditiveBlending });
+    scene.add(new THREE.Points(g, mm));
+  }
+}catch(e){}
+
 /* ---------- load imagery ---------- */
 /* Close-up only: fetch 500m/px NASA GIBS imagery for the region around the
    user's location and hand it to the shader as a hi-res patch. */
@@ -1727,8 +1791,8 @@ Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
   if(m){ moonMat.map = m; moonMat.color.set(0xffffff); moonMat.needsUpdate = true; }
   _coreReady = true;
 });
-/* pull fresh satellite cloud cover every 3 hours */
-setInterval(()=>{
+/* pull fresh satellite cloud cover every 3 hours; corrupt cycles recheck sooner */
+function refreshClouds(){
   if(!liveClouds) return;
   loadCloudsLive().then(t=>{
     if(t){
@@ -1737,7 +1801,8 @@ setInterval(()=>{
       buildStorms(t);
     }
   });
-}, CFG.cloudRefresh);
+}
+setInterval(refreshClouds, CFG.cloudRefresh);
 
 /* ===================== LAYOUT (PC + mobile) ===================== */
 let camDist = 4.7;
@@ -1826,6 +1891,11 @@ function update(){
   /* Sun */
   const s = sunEcl(n);
   const sd = eclToArr(s.lam, 0, n);
+  if(_spin !== 0){
+    const saD = _spin * 0.3, cSD = Math.cos(saD), sSD = Math.sin(saD);
+    const sx0 = sd[0]*cSD + sd[2]*sSD, sz0 = -sd[0]*sSD + sd[2]*cSD;
+    sd[0] = sx0; sd[2] = sz0;
+  }
   earthUniforms.sunDir.value.set(sd[0], sd[1], sd[2]);
   /* sharp lights when far, smooth blurred glow when zoomed in close */
   earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 2.2 : 0.6;
@@ -1983,7 +2053,7 @@ try{
   setTimeout(function(){
     try{
       scene.traverse(function(o){
-        if(o.isPoints && o.material && o.material.color){ o.material.color.setRGB(1.5, 1.5, 1.5); }
+        if(o.isPoints && o.material && o.material.color){ o.material.color.setRGB(1.75, 1.75, 1.75); }
       });
     }catch(e){}
   }, 12000);
