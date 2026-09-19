@@ -398,7 +398,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r67';
+window._TERRA_REV = 'r68';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1637,32 +1637,7 @@ function updateExtras(gm, sd, mdU, illum){
 }
 
 /* ---------- DEEP SKY: real Milky Way panorama + real star clusters ---------- */
-try{
-  CFG.expo = 1;
-  try{ const qq=new URLSearchParams(location.search); if(qq.has('expo')){ const ev=parseFloat(qq.get('expo')); if(isFinite(ev)) CFG.expo=Math.max(0.2, Math.min(2.5, ev)); } }catch(e){}
-  const skyL=new THREE.TextureLoader();
-  skyL.setCrossOrigin('anonymous');
-  skyL.load(URLS.sky[0], function(t){
-    try{
-      t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
-      const m=new THREE.MeshBasicMaterial({ map:t, side:THREE.BackSide, transparent:true,
-        opacity:0.0, blending:THREE.AdditiveBlending, depthWrite:false });
-      const sph=new THREE.Mesh(new THREE.SphereGeometry(3200, 48, 32), m);
-      const gc=radecToArr(266.405, -28.936);
-      const gp=radecToArr(192.859, 27.128);
-      const vx=new THREE.Vector3(gc[0], gc[1], gc[2]).normalize();
-      const vyT=new THREE.Vector3(gp[0], gp[1], gp[2]).normalize();
-      const vz=new THREE.Vector3().crossVectors(vx, vyT).normalize();
-      const vy=new THREE.Vector3().crossVectors(vz, vx).normalize();
-      const bmx=new THREE.Matrix4().makeBasis(vx, vy, vz);
-      sph.quaternion.setFromRotationMatrix(bmx);
-      scene.add(sph);
-      let op=0;
-      const tgt=0.34*CFG.expo;
-      const fad=setInterval(function(){ op+=0.02; if(op>=tgt){ op=tgt; clearInterval(fad); } m.opacity=op; }, 120);
-    }catch(e){}
-  });
-}catch(e){}
+try{ CFG.expo = 1; }catch(e){}
 try{
   const CLUSTERS=[
     [56.75, 24.12, 60, 1.1, 6, 0.9],
