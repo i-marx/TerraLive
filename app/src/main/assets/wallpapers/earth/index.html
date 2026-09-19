@@ -399,7 +399,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r70';
+window._TERRA_REV = 'r71';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -901,7 +901,12 @@ const atmoMat = new THREE.ShaderMaterial({
 scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.075, 192, 192), atmoMat));
 
 /* ---------- Moon ---------- */
-const moonMat = new THREE.MeshPhongMaterial({ color: 0xbbbbbb, shininess: 4, specular: 0x000000 });
+const moonMat = new THREE.MeshPhongMaterial({ color: 0x8a8a8a, shininess: 2, specular: 0x000000 });
+(function(){ const ap=function(t){ try{ t.anisotropy=Math.min(8, renderer.capabilities.getMaxAnisotropy()); }catch(e){} moonMat.map=t; moonMat.color.set(0xffffff); moonMat.needsUpdate=true; };
+  try{ new THREE.TextureLoader().load('moon.jpg', ap, undefined, function(){
+    try{ const l2=new THREE.TextureLoader(); l2.setCrossOrigin('anonymous');
+      l2.load('https://i-marx.github.io/TerraLive/moon.jpg', ap, undefined, function(){}); }catch(e){} }); }catch(e){}
+})();
 const moon = new THREE.Mesh(new THREE.SphereGeometry(CFG.moonRadius, 96, 96), moonMat);
 scene.add(moon);
 
@@ -1047,7 +1052,12 @@ function glowTexture(){
 }
 const planetSprites = {};
 (function(){
-  const gt = glowTexture();
+  const gt = (function(){ const S=128, cvp=document.createElement('canvas'); cvp.width=cvp.height=S;
+    const g=cvp.getContext('2d'); const gr=g.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+    gr.addColorStop(0.00,'rgba(255,255,255,1)'); gr.addColorStop(0.10,'rgba(255,255,255,0.85)');
+    gr.addColorStop(0.22,'rgba(255,255,255,0.28)'); gr.addColorStop(0.45,'rgba(255,255,255,0.06)');
+    gr.addColorStop(1.00,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,S,S); return new THREE.CanvasTexture(cvp); })();
   for(const name of ['Mercury','Venus','Mars','Jupiter','Saturn']){
     const c = PLANET_VIS[name].col;
     const sm = new THREE.SpriteMaterial({
@@ -1060,21 +1070,31 @@ const planetSprites = {};
   }
 })();
 
-/* ---------- real nebulae, at their true sky coordinates ---------- */
+/* ---------- real nebulae: faint pale patches (photographic) ---------- */
 (function(){
-  const gt = glowTexture();
-  const NEBULAE = [   // [RA, Dec, r,g,b, size]
-    [270.9, -24.4, 1.00,0.45,0.55, 26],   // Lagoon Nebula (Sagittarius, near the core)
-    [ 83.8,  -5.4, 1.00,0.50,0.60, 22],   // Orion Nebula
-    [161.3, -59.7, 1.00,0.55,0.50, 24],   // Eta Carinae Nebula
-    [246.8, -24.5, 0.55,0.60,1.00, 22],   // Rho Ophiuchi (blue reflection region)
-    [303.6,  36.9, 1.00,0.50,0.55, 18],   // Sadr region (Cygnus)
-    [ 98.0,   5.0, 1.00,0.55,0.60, 15]    // Rosette region
+  const nebTex=(function(){ const S=128, cvn=document.createElement('canvas'); cvn.width=cvn.height=S;
+    const g=cvn.getContext('2d');
+    let gr=g.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+    gr.addColorStop(0,'rgba(255,255,255,0.55)'); gr.addColorStop(0.45,'rgba(255,255,255,0.16)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,S,S);
+    g.globalCompositeOperation='lighter';
+    for(let i=0;i<4;i++){ const ox=S/2+(Math.random()-0.5)*S*0.4, oy=S/2+(Math.random()-0.5)*S*0.4, rr=S*(0.18+Math.random()*0.25);
+      gr=g.createRadialGradient(ox,oy,0,ox,oy,rr);
+      gr.addColorStop(0,'rgba(255,255,255,'+(0.10+Math.random()*0.12).toFixed(3)+')'); gr.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle=gr; g.beginPath(); g.arc(ox,oy,rr,0,6.2832); g.fill(); }
+    return new THREE.CanvasTexture(cvn); })();
+  const NEBULAE = [
+    [270.9, -24.4, 0.97,0.88,0.87, 14],
+    [ 83.8,  -5.4, 0.96,0.90,0.92, 12],
+    [161.3, -59.7, 0.96,0.91,0.87, 13],
+    [246.8, -24.5, 0.88,0.90,0.97, 12],
+    [303.6,  36.9, 0.96,0.89,0.88, 10],
+    [ 98.0,   5.0, 0.95,0.89,0.89,  8]
   ];
   for(const nb of NEBULAE){
     const sm = new THREE.SpriteMaterial({
-      map: gt, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      color: new THREE.Color(nb[2], nb[3], nb[4]), opacity: 0.12
+      map: nebTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      color: new THREE.Color(nb[2], nb[3], nb[4]), opacity: 0.10
     });
     const sp = new THREE.Sprite(sm);
     const v = radecToArr(nb[0], nb[1]);
@@ -1142,6 +1162,31 @@ function paintAurora(coords){
   const sx=sm.getContext('2d'); sx.imageSmoothingEnabled=true;
   sx.drawImage(cv,0,0,96,48);
   cx.clearRect(0,0,W,H); cx.drawImage(sm,0,0,W,H);
+  /* curtain structure: value-noise rays + red poleward fringe */
+  try{
+    const vn=function(n,st){ const c2=Math.ceil(n/st)+2, pts=[]; for(let i=0;i<c2;i++) pts.push(Math.random());
+      const o=new Float32Array(n); for(let i=0;i<n;i++){ const ff=i/st, i0=Math.floor(ff), tt=ff-i0, u=tt*tt*(3-2*tt); o[i]=pts[i0]*(1-u)+pts[i0+1]*u; } return o; };
+    const nA=vn(W,19), nB=vn(W,6), nC=vn(W,3), env=vn(W,80), wob=vn(H,13);
+    const id=cx.getImageData(0,0,W,H), dd=id.data;
+    for(let i=0;i<W;i++){
+      let bcN=-1,gN=0,bcS=-1,gS=0;
+      for(let j=0;j<H;j++){ const g=dd[(j*W+i)*4+1]; if(j<H/2){ if(g>gN){gN=g;bcN=j;} } else { if(g>gS){gS=g;bcS=j;} } }
+      for(let j=0;j<H;j++){
+        const o=(j*W+i)*4, g=dd[o+1]; if(!g) continue;
+        const sh=Math.round((wob[j]-0.5)*6), k=Math.min(W-1,Math.max(0,i+sh));
+        let n=0.55*nA[k]+0.30*nB[k]+0.15*nC[k]; n=Math.pow(Math.max(0,Math.min(1,n)),1.25);
+        const e=0.35+0.65*env[k], m=(1-e)+e*(0.30+0.95*n);
+        const g2=Math.min(255, g*m*0.95);
+        let pole=0;
+        if(j<H/2){ if(bcN>=0) pole=Math.max(0,Math.min(1,(bcN-j)/9)); }
+        else if(bcS>=0) pole=Math.max(0,Math.min(1,(j-bcS)/9));
+        dd[o]=Math.min(255, g2*(0.14+0.60*Math.pow(pole,1.7)));
+        dd[o+1]=g2;
+        dd[o+2]=Math.min(255, g2*0.30);
+      }
+    }
+    cx.putImageData(id,0,0);
+  }catch(e){}
   const t=new THREE.CanvasTexture(cv);
   t.wrapS=THREE.RepeatWrapping; t.minFilter=THREE.LinearMipmapLinearFilter;
   t.magFilter=THREE.LinearFilter; t.generateMipmaps=true;
@@ -1157,13 +1202,16 @@ try{
     fragmentShader:`uniform sampler2D aurMap; uniform vec3 sunDir; uniform float uAur;
       varying vec2 vUv; varying vec3 vN; varying vec3 vWP;
       void main(){
-        float a=texture2D(aurMap,vUv).g;
+        vec3 am=texture2D(aurMap,vUv).rgb;
+        float a=am.g;
         if(a<0.03){ gl_FragColor=vec4(0.0); return; }
+        float rr=clamp(am.r/max(am.g,0.01),0.0,0.9);
         a=smoothstep(0.03, 0.9, a);
         vec3 n=normalize(vN); vec3 vd=normalize(cameraPosition-vWP);
         float night=smoothstep(0.06,-0.10,dot(n,sunDir));
         float limb=pow(1.0-max(dot(n,vd),0.0),1.4);
         vec3 col=vec3(0.12,1.0,0.45)*a + vec3(0.50,0.15,0.80)*a*a*0.65;
+        col=mix(col, vec3(1.0,0.22,0.28)*(0.55+0.45*a), rr*0.62);
         gl_FragColor=vec4(col*night*(0.35+1.1*limb)*uAur,1.0);
       }`});
   const aurShell=new THREE.Mesh(new THREE.SphereGeometry(1.015,128,128), aurMat);
@@ -1392,46 +1440,6 @@ try{
   }
 }catch(e){}
 
-/* ---- EARTHQUAKES: USGS M4.5+ of the last day as amber pulse rings ---- */
-const quakes=[];
-try{
-  const rt=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=128;
-    const cx=cv.getContext('2d');
-    try{ cx.filter='blur(3px)'; }catch(e){}
-    cx.strokeStyle='rgba(255,255,255,0.9)'; cx.lineWidth=6;
-    cx.beginPath(); cx.arc(64,64,44,0,6.2832); cx.stroke();
-    cx.strokeStyle='rgba(255,255,255,0.35)'; cx.lineWidth=4;
-    cx.beginPath(); cx.arc(64,64,30,0,6.2832); cx.stroke();
-    try{ cx.filter='none'; }catch(e){}
-    const g=cx.createRadialGradient(64,64,0,64,64,10);
-    g.addColorStop(0,'rgba(255,255,255,0.5)'); g.addColorStop(1,'rgba(255,255,255,0)');
-    cx.fillStyle=g; cx.fillRect(0,0,128,128);
-    return new THREE.CanvasTexture(cv); })();
-  const fetchQuakes=()=>{
-    fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson')
-      .then(r=>r.json()).then(j=>{
-        try{
-          if(!j || !Array.isArray(j.features)) return;
-          for(const q of quakes){ try{ earth.remove(q.sp); }catch(e){} }
-          quakes.length=0;
-          let n=0;
-          for(const ft of j.features){
-            if(++n>30) break;
-            const c=ft.geometry && ft.geometry.coordinates; if(!c) continue;
-            const mag=ft.properties.mag||4.5;
-            const m=new THREE.SpriteMaterial({ map:rt, transparent:true, depthWrite:false,
-              blending:THREE.AdditiveBlending, color:new THREE.Color(1.0,0.42,0.22), opacity:0 });
-            const sp=new THREE.Sprite(m);
-            const d=localDir(c[1], c[0]); sp.position.set(d.x*1.005, d.y*1.005, d.z*1.005);
-            earth.add(sp);
-            quakes.push({sp, lat:c[1], lon:c[0], mag:mag, t0:ft.properties.time||Date.now(), ph:Math.random()});
-          }
-        }catch(e){}
-      }).catch(()=>{});
-  };
-  fetchQuakes(); setInterval(fetchQuakes, 15*60*1000);
-}catch(e){}
-
 /* ---- SEA ICE: real AMSR2 concentration, refreshed twice a day ---- */
 try{
   const fetchIce=()=>{
@@ -1604,20 +1612,7 @@ function updateExtras(gm, sd, mdU, illum){
     const nightF=Math.min(1, Math.max(0, (-dn-0.02)/0.12));
     em.sp.material.opacity = em.base*nightF*(0.80+0.25*Math.sin(tsec*2.6+em.ph));
   }
-  /* earthquake ripples: slow soft rings, brighter at night, fading over ~36h */
-  for(const q of quakes){
-    const ph=(tsec*0.22 + q.ph) % 1.0;
-    const e=1 - Math.pow(1-ph, 2.2);
-    const age=(Date.now()-q.t0)/3600000;
-    const ageF=Math.max(0.10, Math.min(1, 1 - age/36));
-    const wdq=locationDir(q.lat, q.lon, gm);
-    const dnq=wdq[0]*sd[0]+wdq[1]*sd[1]+wdq[2]*sd[2];
-    const dayDim=0.30 + 0.70*Math.min(1, Math.max(0, (-dnq+0.15)/0.4));
-    const base=0.011 + Math.max(0, q.mag-4.5)*0.005;
-    const sc=base*(0.35 + e*1.5);
-    q.sp.scale.set(sc, sc, 1);
-    q.sp.material.opacity=(0.30 + Math.min(0.25,(q.mag-4.5)*0.09))*(1-e)*ageF*dayDim;
-  }
+  
   /* pole caps follow the real sunlight */
   if(_capN && _capS){
     const smst=function(a,b,x){ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
@@ -1915,7 +1910,7 @@ function update(){
     const v = eclToArr(p.lam, p.bet, n);
     const sp = planetSprites[p.name];
     sp.position.set(v[0]*2900, v[1]*2900, v[2]*2900);
-    const sc = 2900 * 0.0021 * Math.pow(10, -0.09 * Math.max(p.mag, -4.6));
+    const sc = 2900 * 0.00115 * Math.pow(10, -0.09 * Math.max(p.mag, -4.6));
     sp.scale.set(sc, sc, 1);
     sp.material.opacity = Math.min(1, Math.pow(10, -0.2*(p.mag - 1.5)));
   }
