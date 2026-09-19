@@ -379,7 +379,9 @@ const URLS = {
   clouds: ['https://cdn.jsdelivr.net/gh/turban/webgl-earth@master/images/fair_clouds_4k.png',
            'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_clouds_1024.png',
            'https://unpkg.com/three-globe/example/img/clouds.png'],
-  moon: ['https://www.solarsystemscope.com/textures/download/2k_moon.jpg',
+  moon: ['moon.jpg',
+         'https://i-marx.github.io/TerraLive/moon.jpg',
+         'https://www.solarsystemscope.com/textures/download/2k_moon.jpg',
          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/moon_1024.jpg',
          'https://unpkg.com/three-globe/example/img/moon.jpg']
 };
@@ -399,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r71';
+window._TERRA_REV = 'r72';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -901,12 +903,8 @@ const atmoMat = new THREE.ShaderMaterial({
 scene.add(new THREE.Mesh(new THREE.SphereGeometry(1.075, 192, 192), atmoMat));
 
 /* ---------- Moon ---------- */
-const moonMat = new THREE.MeshPhongMaterial({ color: 0x8a8a8a, shininess: 2, specular: 0x000000 });
-(function(){ const ap=function(t){ try{ t.anisotropy=Math.min(8, renderer.capabilities.getMaxAnisotropy()); }catch(e){} moonMat.map=t; moonMat.color.set(0xffffff); moonMat.needsUpdate=true; };
-  try{ new THREE.TextureLoader().load('moon.jpg', ap, undefined, function(){
-    try{ const l2=new THREE.TextureLoader(); l2.setCrossOrigin('anonymous');
-      l2.load('https://i-marx.github.io/TerraLive/moon.jpg', ap, undefined, function(){}); }catch(e){} }); }catch(e){}
-})();
+const moonMat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 2, specular: 0x000000 });
+
 const moon = new THREE.Mesh(new THREE.SphereGeometry(CFG.moonRadius, 96, 96), moonMat);
 scene.add(moon);
 
