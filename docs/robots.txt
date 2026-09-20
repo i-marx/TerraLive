@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://i-marx.github.io/TerraLive/sitemap.xml
