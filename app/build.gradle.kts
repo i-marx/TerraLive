@@ -11,7 +11,7 @@ android {
         applicationId = "com.terralive.wallpapers"
         minSdk = 26
         targetSdk = 36
-        versionCode = 91
+        versionCode = 92
         versionName = "1.0"
     }
     signingConfigs {
