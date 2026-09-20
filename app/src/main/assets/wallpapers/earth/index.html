@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r86';
+window._TERRA_REV = 'r87';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1086,7 +1086,8 @@ const earthMat = new THREE.ShaderMaterial({
       float lk = uLook;
       float l0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
       if(lk < 3.5){
-        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));   /* winner saturation, eased in shadows */
+        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));
+        col = max(col, vec3(0.0));   /* winner saturation, eased in shadows */
         float base = 0.0;
         if(abs(lk-1.0)<0.5) base=0.35;
         else if(abs(lk-2.0)<0.5) base=0.65;
@@ -1097,11 +1098,13 @@ const earthMat = new THREE.ShaderMaterial({
         float l1 = dot(col, vec3(0.2126, 0.7152, 0.0722));
         col = mix(vec3(l1), col, 1.0 + 0.14*k*smoothstep(0.02, 0.20, l1));   /* denser colour, shadow-safe */
       } else if(abs(lk-4.0)<0.5){
-        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));    /* winner, no polarize */
+        col = mix(vec3(l0), col, 1.0 + 0.24*smoothstep(0.02, 0.20, l0));
+        col = max(col, vec3(0.0));    /* winner, no polarize */
       }
       col = aces(col);
       float lumi = dot(col, vec3(0.2126, 0.7152, 0.0722));
       col = mix(vec3(lumi), col, 1.14);
+      col = max(col, vec3(0.0));
       col = pow(col, vec3(1.08));
       col = pow(col, vec3(1.0/2.2));
       gl_FragColor = vec4(col, 1.0);
