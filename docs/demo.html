@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r89';
+window._TERRA_REV = 'r90';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -862,14 +862,15 @@ function loadCloudsLive(){
         donorP.then(function(donor){
           try{
             const r=repairCloudCanvas(im, donor);
-            if(r.frac < 0.02){
+            const FR=(r.cv.width===8192)?1.75:1;
+            if(r.frac < 0.02*FR){
               try{ (function(){ let sv=r.cv; if(sv.width>4096){ const dn=document.createElement('canvas'); dn.width=4096; dn.height=2048; const dnx=dn.getContext('2d'); dnx.imageSmoothingEnabled=true; dnx.drawImage(r.cv,0,0,4096,2048); sv=dn; } sv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); })(); }catch(e){}
             }
-            if(r.frac > 0.02 && !window._cloudRetryOn){
+            if(r.frac > 0.02*FR && !window._cloudRetryOn){
               window._cloudRetryOn = true;
               setTimeout(function(){ window._cloudRetryOn = false; try{ refreshClouds(); }catch(e){} }, 15*60*1000);
             }
-            if(r.frac > 0.06 && !donor){
+            if(r.frac > 0.06*FR && !donor){
               loadCloudsModel().then(function(mt){ res(mt || texFromCloudCanvas(r.cv)); });
               return;
             }
