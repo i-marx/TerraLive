@@ -400,9 +400,10 @@ const URLS = {
                   'https://unpkg.com/three-globe/example/img/earth-night.jpg',
                   'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'];
   }
+  window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r88';
+window._TERRA_REV = 'r89';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -2039,9 +2040,7 @@ function loadRegional(){
 }
 loadRegional();
 
-Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
-             loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
-  if(d){ try{
+function __applyDay(d){ try{
   const _gw=(d.image && d.image.width>=8192)?8192:4096;
   const _dc=document.createElement('canvas'); _dc.width=_gw; _dc.height=_gw/2;
   _dc.getContext('2d').drawImage(d.image,0,0,_dc.width,_dc.height);
@@ -2077,7 +2076,10 @@ Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
     }catch(e){} };
     i2.onerror=function(){};
     i2.src='https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&SRS=EPSG:4326&STYLES=&FORMAT=image/jpeg&BBOX=-180,75,180,90&WIDTH=4096&HEIGHT=342&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor&TIME='+dts;
-  }catch(e){} })(); }catch(e){ earthUniforms.dayMap.value = d; } }
+  }catch(e){} })(); }catch(e){ try{ earthUniforms.dayMap.value = d; }catch(_e){} } }
+Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
+             loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
+  if(d){ __applyDay(d); }
   if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
   if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
@@ -2088,6 +2090,7 @@ Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
     buildStorms(c);
   }
   if(m){ moonMat.map = m; moonMat.color.set(0xffffff); moonMat.needsUpdate = true; }
+  if(window.__gibs8){ setTimeout(function(){ try{ loadTex([window.__gibs8]).then(function(d8){ try{ if(d8 && d8.image && d8.image.width>=8192) __applyDay(d8); }catch(e){} }); }catch(e){} }, 5000); }
   _coreReady = true;
 });
 /* pull fresh satellite cloud cover every 3 hours; corrupt cycles recheck sooner */
