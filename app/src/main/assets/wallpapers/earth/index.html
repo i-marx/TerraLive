@@ -401,7 +401,7 @@ const URLS = {
   }
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r85';
+window._TERRA_REV = 'r86';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -566,7 +566,8 @@ function __iceFloorTL(cv, latFull, latStart, floorV){ try{
   cx2.putImageData(id,0,0);
 }catch(e){} }
 function repairCloudCanvas(im, donor){
-  const W=4096, H=2048, B=16, BW=W/B, BH=H/B;
+  const W=(im.width>=8192 && typeof renderer!=='undefined' && renderer.capabilities && renderer.capabilities.maxTextureSize>=8192 && (navigator.deviceMemory||4)>=6)?8192:4096;
+  const H=W/2, B=16, BW=W/B, BH=H/B;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const cx=cv.getContext('2d');
   cx.drawImage(im, 0, 0, W, H);
@@ -650,11 +651,65 @@ function texFromCloudCanvas(cv){ window._cloudCvRef=cv;
   t.generateMipmaps=true;
   window._cloudTexRef=t; return t;
 }
+function __fractalClouds(gridCv, GO, GA){
+  const W=1024, H=512;
+  const upscaleWrap=function(src, tw, th){
+    let cur=document.createElement('canvas'); cur.width=src.width*3; cur.height=src.height;
+    let cc=cur.getContext('2d'); cc.drawImage(src,0,0); cc.drawImage(src,src.width,0); cc.drawImage(src,src.width*2,0);
+    while(cur.width < tw*3){
+      const nx=document.createElement('canvas'); nx.width=cur.width*2; nx.height=Math.min(th, cur.height*2);
+      const nc=nx.getContext('2d'); nc.imageSmoothingEnabled=true;
+      nc.drawImage(cur,0,0,nx.width,nx.height); cur=nx;
+    }
+    const out=document.createElement('canvas'); out.width=tw; out.height=th;
+    const oc=out.getContext('2d'); oc.imageSmoothingEnabled=true;
+    oc.drawImage(cur, cur.width/3, 0, cur.width/3, cur.height, 0, 0, tw, th);
+    return out;
+  };
+  const noiseOct=function(bw,bh){ const b=document.createElement('canvas'); b.width=bw; b.height=bh;
+    const bx=b.getContext('2d'); const id=bx.createImageData(bw,bh);
+    for(let i=0;i<id.data.length;i+=4){ const v=Math.floor(Math.random()*256); id.data[i]=v; id.data[i+1]=v; id.data[i+2]=v; id.data[i+3]=255; }
+    bx.putImageData(id,0,0); return upscaleWrap(b, W, H); };
+  const cover=upscaleWrap(gridCv, W, H);
+  const o1=noiseOct(12,7), o2=noiseOct(28,16), o3=noiseOct(84,48), o4=noiseOct(220,128);
+  const gd=function(c){ return c.getContext('2d').getImageData(0,0,W,H).data; };
+  const C=gd(cover), N1=gd(o1), N2=gd(o2), N3=gd(o3), N4=gd(o4);
+  const out=document.createElement('canvas'); out.width=W; out.height=H;
+  const ox=out.getContext('2d'); const oid=ox.createImageData(W,H); const od=oid.data;
+  const sst=function(a,b,x){ const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); };
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x, p=i*4; const cov=C[p+3]/255;
+    if(cov<0.015){ od[p]=255; od[p+1]=255; od[p+2]=255; od[p+3]=0; continue; }
+    const wx=Math.round((N2[p]-128)/128*18), wy=Math.round((N1[p]-128)/128*7);
+    const xs=((x+wx)%W+W)%W, ys=Math.max(0,Math.min(H-1,y+wy));
+    const pw=(ys*W+xs)*4;
+    const D=(0.28*N1[p]+0.22*N2[pw]+0.30*N3[pw]+0.20*N4[pw])/255;
+    let a=cov*(0.24+0.76*sst(0.32,0.70, D*0.60+cov*0.55));
+    const core=sst(0.72,0.95,cov);
+    a*=1-core*0.30*(1-sst(0.35,0.75,N3[pw]/255));
+    a*=0.86+0.14*(N4[pw]/255);
+    a=Math.pow(a,1.22);
+    od[p]=255; od[p+1]=255; od[p+2]=255;
+    od[p+3]=Math.max(0,Math.min(255, a*278 + (Math.random()-0.5)*3));
+  }
+  ox.putImageData(oid,0,0); return out;
+}
 function loadCloudsModel(){
-  /* keyless model clouds (Open-Meteo): smooth but honest - emergency source */
   return new Promise(function(res){
     try{
       const GA=24, GO=48;
+      const build=function(vals){ try{
+        const gcv=document.createElement('canvas'); gcv.width=GO; gcv.height=GA;
+        const gx=gcv.getContext('2d'); const gid=gx.createImageData(GO,GA);
+        for(let q=0;q<GA*GO;q++){ const i2=q*4; gid.data[i2]=255; gid.data[i2+1]=255; gid.data[i2+2]=255; gid.data[i2+3]=Math.round(Math.min(100,Math.max(0,vals[q]||0))*2.4); }
+        gx.putImageData(gid,0,0);
+        const m2=__fractalClouds(gcv, GO, GA);
+        __polarConditionTL(m2,true,74,82); __polarConditionTL(m2,false,74,82);
+        res(texFromCloudCanvas(m2));
+      }catch(e){ res(null); } };
+      const useCache=function(){ idbGet('mgrid').then(function(g){
+          if(g && g.v && (Date.now()-g.t) < 12*3600*1000){ build(g.v); } else res(null);
+        }).catch(function(){ res(null); }); };
       const lats=[], lons=[];
       for(let a=0;a<GA;a++) for(let o=0;o<GO;o++){
         lats.push((87.5 - a*(175/(GA-1))).toFixed(2));
@@ -665,42 +720,15 @@ function loadCloudsModel(){
         return fetch('https://api.open-meteo.com/v1/forecast?latitude='+lats.slice(i0,i1).join(',')+'&longitude='+lons.slice(i0,i1).join(',')+'&current=cloud_cover').then(function(r){ return r.json(); });
       };
       Promise.all([call(0,half), call(half,half*2)]).then(function(parts){
-        const arr=[].concat(parts[0], parts[1]);
-        const cv=document.createElement('canvas'); cv.width=GO; cv.height=GA;
-        const cx=cv.getContext('2d');
-        const dd=cx.createImageData(GO, GA);
-        for(let q=0;q<GA*GO;q++){
-          const c=arr[q] && arr[q].current ? arr[q].current.cloud_cover : 0;
-          const i=q*4;
-          dd.data[i]=255; dd.data[i+1]=255; dd.data[i+2]=255;
-          dd.data[i+3]=Math.round(Math.min(100, Math.max(0, c))*2.4);
+        const bad=(parts[0]&&parts[0].error)||(parts[1]&&parts[1].error);
+        const arr=[].concat(parts[0]||[], parts[1]||[]);
+        if(!bad && Array.isArray(arr) && arr.length>=GA*GO){
+          const vals=[]; let nz=0;
+          for(let q=0;q<GA*GO;q++){ const c=arr[q]&&arr[q].current? arr[q].current.cloud_cover : null; vals.push(c==null?0:c); if(c!=null) nz++; }
+          if(nz > GA*GO*0.7){ try{ idbPut('mgrid', {t:Date.now(), v:vals}); }catch(e){} build(vals); return; }
         }
-        cx.putImageData(dd, 0, 0);
-        let cur=document.createElement('canvas'); cur.width=GO*3; cur.height=GA;
-        let cc=cur.getContext('2d'); cc.drawImage(cv,0,0); cc.drawImage(cv,GO,0); cc.drawImage(cv,GO*2,0);
-        while(cur.width<3072){
-          const nx=document.createElement('canvas'); nx.width=cur.width*2; nx.height=cur.height*2;
-          const nc=nx.getContext('2d'); nc.imageSmoothingEnabled=true;
-          nc.drawImage(cur,0,0,nx.width,nx.height); cur=nx;
-        }
-        const m2=document.createElement('canvas'); m2.width=1024; m2.height=512;
-        const m2x=m2.getContext('2d'); m2x.imageSmoothingEnabled=true;
-        m2x.drawImage(cur, cur.width/3, 0, cur.width/3, cur.height, 0, 0, 1024, 512);
-        try{
-          const id9=m2x.getImageData(0,0,1024,512), d9=id9.data;
-          const q1=Math.random()*6.283, q2=Math.random()*6.283, q3=Math.random()*6.283, q4=Math.random()*6.283;
-          for(let y=0;y<512;y++){ const fy=y/512*6.283;
-            for(let x=0;x<1024;x++){ const o=(y*1024+x)*4; const a9=d9[o+3]; if(!a9) continue;
-              const fx=x/1024*6.283;
-              const n9=0.5*Math.sin(fx*5+q1+2.0*Math.sin(fy*3+q2)) + 0.5*Math.sin(fx*11+q3+1.5*Math.sin(fy*7+q4));
-              const la9=Math.abs(90-(y/512)*180); const amp9=la9>=80?0:(la9>74?0.24*(80-la9)/6:0.24); const m9=1+amp9*n9;
-              d9[o+3]=Math.max(0,Math.min(255, a9*m9 + (Math.random()-0.5)*3));
-            } }
-          m2x.putImageData(id9,0,0);
-        }catch(e){}
-        __polarConditionTL(m2,true,74,82); __polarConditionTL(m2,false,74,82);
-        res(texFromCloudCanvas(m2));
-      }).catch(function(){ res(null); });
+        useCache();
+      }).catch(useCache);
     }catch(e){ res(null); }
   });
 }
@@ -769,10 +797,10 @@ function applyPolarCloudsTL(cv){ try{
   flat(true); flat(false);
 }catch(e){} }
 function fetchPolarClouds(){ try{
-  const GA=9, GO=48;
+  const GA=6, GO=36;
   const mk=function(sign){ const lats=[], lons=[];
     for(let a2=0;a2<GA;a2++) for(let o=0;o<GO;o++){
-      lats.push((sign*(89-a2*2)).toFixed(2));
+      lats.push((sign*(87-a2*3)).toFixed(2));
       lons.push((-180 + o*(360/GO) + 180/GO).toFixed(2)); }
     const half=Math.floor(lats.length/2);
     const c1=fetch('https://api.open-meteo.com/v1/forecast?latitude='+lats.slice(0,half).join(',')+'&longitude='+lons.slice(0,half).join(',')+'&current=cloud_cover').then(function(r){ return r.json(); });
@@ -784,12 +812,14 @@ function fetchPolarClouds(){ try{
         return {ga:GA, go:GO, v:v}; }); };
   Promise.all([mk(1), mk(-1)]).then(function(ps){
     if(ps[0]) _polarCld.n=ps[0]; if(ps[1]) _polarCld.s=ps[1];
+    try{ if(ps[0]||ps[1]) idbPut('pgrid', {t:Date.now(), n:ps[0]?{ga:ps[0].ga,go:ps[0].go,v:Array.prototype.slice.call(ps[0].v)}:null, s:ps[1]?{ga:ps[1].ga,go:ps[1].go,v:Array.prototype.slice.call(ps[1].v)}:null}); }catch(e){}
+    if(!ps[0]&&!ps[1]){ idbGet('pgrid').then(function(g){ if(g&&(Date.now()-g.t)<12*3600*1000){ if(g.n){ g.n.v=new Float32Array(g.n.v); _polarCld.n=g.n; } if(g.s){ g.s.v=new Float32Array(g.s.v); _polarCld.s=g.s; } try{ if(window._cloudCvRef&&window._cloudTexRef){ applyPolarCloudsTL(window._cloudCvRef); window._cloudTexRef.needsUpdate=true; } }catch(e){} } }).catch(function(){}); }
     if(!ps[0]&&!ps[1]&&!window._polRetry){ window._polRetry=true; setTimeout(function(){ window._polRetry=false; try{ fetchPolarClouds(); }catch(e){} }, 30000); }
     try{ if((ps[0]||ps[1]) && window._cloudCvRef && window._cloudTexRef){
       applyPolarCloudsTL(window._cloudCvRef);
       window._cloudTexRef.needsUpdate=true; } }catch(e){}
   }).catch(function(){});
-  setTimeout(fetchPolarClouds, 2*3600*1000);
+  setTimeout(fetchPolarClouds, 3*3600*1000);
 }catch(e){} }
 setTimeout(fetchPolarClouds, 2500);
 function loadCloudsLive(){
@@ -831,7 +861,7 @@ function loadCloudsLive(){
           try{
             const r=repairCloudCanvas(im, donor);
             if(r.frac < 0.02){
-              try{ r.cv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); }catch(e){}
+              try{ (function(){ let sv=r.cv; if(sv.width>4096){ const dn=document.createElement('canvas'); dn.width=4096; dn.height=2048; const dnx=dn.getContext('2d'); dnx.imageSmoothingEnabled=true; dnx.drawImage(r.cv,0,0,4096,2048); sv=dn; } sv.toBlob(function(b){ if(b) idbPut('clouds', b); }, 'image/png'); })(); }catch(e){}
             }
             if(r.frac > 0.02 && !window._cloudRetryOn){
               window._cloudRetryOn = true;
