@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r93';
+window._TERRA_REV = 'r94';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -713,6 +713,7 @@ function loadCloudsModel(preferCache){
         const m2=__fractalClouds(gcv, GO, GA);
         __polarConditionTL(m2,true,74,82); __polarConditionTL(m2,false,74,82);
         window._modelCloudCv=m2;
+        try{ if(!window._lastCloudHadDonor && window._lastCloudFrac && window._lastCloudFrac > 0.05*(window._lastCloudFR||1)){ window._lastCloudFrac=0; setTimeout(function(){ try{ refreshClouds(); }catch(e){} }, 500); } }catch(e){}
         res(texFromCloudCanvas(m2));
       }catch(e){ res(null); } };
       const useCache=function(){ idbGet('mgrid').then(function(g){
@@ -872,6 +873,7 @@ function loadCloudsLive(){
           try{
             const r=repairCloudCanvas(im, donor);
             const FR=(r.cv.width===8192)?1.75:1;
+            window._lastCloudFrac=r.frac; window._lastCloudFR=FR; window._lastCloudHadDonor=!!donor;
             const outOk=(function(){ try{
               const W2=r.cv.width, H2=r.cv.height, B2=16;
               const dd2=r.cv.getContext('2d').getImageData(0,0,W2,H2).data;
