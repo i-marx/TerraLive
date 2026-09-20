@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r90';
+window._TERRA_REV = 'r91';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -622,6 +622,11 @@ function repairCloudCanvas(im, donor){
       const dc2=document.createElement('canvas'); dc2.width=W; dc2.height=H;
       const dx2=dc2.getContext('2d'); dx2.imageSmoothingEnabled=true; dx2.drawImage(donor, 0, 0, W, H);
       pv=dx2.getImageData(0, 0, W, H).data;
+    } else if(window._modelCloudCv){
+      const mcv2=document.createElement('canvas'); mcv2.width=W; mcv2.height=H;
+      const mx2=mcv2.getContext('2d'); mx2.imageSmoothingEnabled=true;
+      mx2.drawImage(window._modelCloudCv, 0, 0, W, H);
+      pv=mx2.getImageData(0, 0, W, H).data;
     } else {
       const s1c=document.createElement('canvas'); s1c.width=96; s1c.height=48;
       const s1x=s1c.getContext('2d'); s1x.imageSmoothingEnabled=true; s1x.drawImage(cv, 0, 0, 96, 48);
@@ -629,7 +634,7 @@ function repairCloudCanvas(im, donor){
       const s2x=s2c.getContext('2d'); s2x.imageSmoothingEnabled=true; s2x.drawImage(s1c, 0, 0, W, H);
       pv=s2x.getImageData(0, 0, W, H).data;
     }
-    const donorScale=donor?1.0:0.92;
+    const donorScale=(donor||window._modelCloudCv)?1.0:0.92;
     for(let i=0; i<p.length; i+=4){
       const m=dm[i+3]/255;
       if(m>0.01){
@@ -696,7 +701,7 @@ function __fractalClouds(gridCv, GO, GA){
   }
   ox.putImageData(oid,0,0); return out;
 }
-function loadCloudsModel(){
+function loadCloudsModel(preferCache){
   return new Promise(function(res){
     try{
       const GA=24, GO=48;
@@ -707,6 +712,7 @@ function loadCloudsModel(){
         gx.putImageData(gid,0,0);
         const m2=__fractalClouds(gcv, GO, GA);
         __polarConditionTL(m2,true,74,82); __polarConditionTL(m2,false,74,82);
+        window._modelCloudCv=m2;
         res(texFromCloudCanvas(m2));
       }catch(e){ res(null); } };
       const useCache=function(){ idbGet('mgrid').then(function(g){
@@ -721,7 +727,7 @@ function loadCloudsModel(){
       const call=function(i0,i1){
         return fetch('https://api.open-meteo.com/v1/forecast?latitude='+lats.slice(i0,i1).join(',')+'&longitude='+lons.slice(i0,i1).join(',')+'&current=cloud_cover').then(function(r){ return r.json(); });
       };
-      Promise.all([call(0,half), call(half,half*2)]).then(function(parts){
+      const doFetch=function(){ Promise.all([call(0,half), call(half,half*2)]).then(function(parts){
         const bad=(parts[0]&&parts[0].error)||(parts[1]&&parts[1].error);
         const arr=[].concat(parts[0]||[], parts[1]||[]);
         if(!bad && Array.isArray(arr) && arr.length>=GA*GO){
@@ -730,7 +736,8 @@ function loadCloudsModel(){
           if(nz > GA*GO*0.7){ try{ idbPut('mgrid', {t:Date.now(), v:vals}); }catch(e){} build(vals); return; }
         }
         useCache();
-      }).catch(useCache);
+      }).catch(useCache); };
+      if(preferCache){ idbGet('mgrid').then(function(g){ if(g && g.v && (Date.now()-g.t)<3*3600*1000){ build(g.v); } else doFetch(); }).catch(doFetch); } else doFetch();
     }catch(e){ res(null); }
   });
 }
@@ -824,6 +831,7 @@ function fetchPolarClouds(){ try{
   setTimeout(fetchPolarClouds, 3*3600*1000);
 }catch(e){} }
 setTimeout(fetchPolarClouds, 2500);
+setTimeout(function(){ try{ if(!window._modelCloudCv) loadCloudsModel(true); }catch(e){} }, 1500);
 function loadCloudsLive(){
   const urls=liveCloudURLs().slice().sort(function(a, b){
     return ((a.indexOf('4096')>=0)?-1:1) - ((b.indexOf('4096')>=0)?-1:1);
@@ -870,7 +878,7 @@ function loadCloudsLive(){
               window._cloudRetryOn = true;
               setTimeout(function(){ window._cloudRetryOn = false; try{ refreshClouds(); }catch(e){} }, 15*60*1000);
             }
-            if(r.frac > 0.06*FR && !donor){
+            if(r.frac > 0.35*FR && !donor && !window._modelCloudCv){
               loadCloudsModel().then(function(mt){ res(mt || texFromCloudCanvas(r.cv)); });
               return;
             }
