@@ -307,5 +307,10 @@ class MainActivity : AppCompatActivity() {
             "The planet turns gently on its axis (full view)") {
             p.edit().putBoolean(Wallpapers.KEY_ROT, !rotOn).apply(); refreshSheet()
         })
+        val cosmosOn = p.getBoolean(Wallpapers.KEY_COSMOS, false)
+        body.addView(optionCard(cosmosOn, "Long exposure cosmos",
+            "A luminous Milky Way sky, like a long exposure photograph") {
+            p.edit().putBoolean(Wallpapers.KEY_COSMOS, !cosmosOn).apply(); refreshSheet()
+        })
     }
 }
