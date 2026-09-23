@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r101';
+window._TERRA_REV = 'r102';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -590,8 +590,12 @@ function repairCloudCanvas(im, donor){
   const depth=new Int16Array(BW*BH).fill(-1);
   const queue=[];
   let kept=0, keptStrict=0;
+  const bandT=Math.floor(BH*0.17), bandB=Math.ceil(BH*0.83);
   for(let q=0; q<BW*BH; q++){
-    if(mean[q]>243 && sdA[q]<1.8){ depth[q]=0; keep[q]=1; kept++; keptStrict++; queue.push(q); }
+    const qy=(q/BW)|0;
+    if(qy<bandT || qy>=bandB) continue;
+    /* corruption = an exactly-flat plateau at visible alpha; real cloud cores always carry texture */
+    if(sdA[q]<0.6 && mean[q]>30){ depth[q]=0; keep[q]=1; kept++; keptStrict++; queue.push(q); }
   }
   let qi=0;
   while(qi<queue.length){
@@ -603,7 +607,9 @@ function repairCloudCanvas(im, donor){
       const t=nbs[t2];
       if(t<0 || t>=BW*BH) continue;
       if((t===c-1 || t===c+1) && ((t/BW)|0)!==cy) continue;
-      if(depth[t]<0 && mean[t]>200){ depth[t]=d0+1; keep[t]=1; kept++; queue.push(t); }
+      const ty=(t/BW)|0;
+      if(ty<bandT || ty>=bandB) continue;
+      if(depth[t]<0 && sdA[t]<1.2 && Math.abs(mean[t]-mean[c])<8){ depth[t]=d0+1; keep[t]=1; kept++; queue.push(t); }
     }
   }
   if(kept>0){
@@ -849,12 +855,13 @@ function loadCloudsLive(){
           const x9=c9.getContext('2d'); x9.drawImage(im,0,0);
           const d9=x9.getImageData(0,0,W9,H9).data;
           let bad=0, chk=0;
-          for(let by=0;by<H9/B9;by+=2) for(let bx=0;bx<W9/B9;bx+=2){
+          const bT9=Math.floor((H9/B9)*0.17), bB9=Math.ceil((H9/B9)*0.83);
+          for(let by=bT9;by<bB9;by+=2) for(let bx=0;bx<W9/B9;bx+=2){
             let s1=0,s2=0,n9=0;
             for(let sy=2;sy<B9;sy+=4) for(let sx=2;sx<B9;sx+=4){
               const idx=((by*B9+sy)*W9+(bx*B9+sx))*4; const v=d9[idx+3]; s1+=v; s2+=v*v; n9++; }
             const mn=s1/n9, sd9=Math.sqrt(Math.max(0,s2/n9-mn*mn));
-            chk++; if(mn>243 && sd9<1.8) bad++;
+            chk++; if(sd9<0.6 && mn>30) bad++;
           }
           if(bad/Math.max(1,chk) > 0.003){ try{ idbPut('clouds', null); }catch(e){} res(null); return; }
         }catch(e){}
@@ -878,12 +885,13 @@ function loadCloudsLive(){
               const W2=r.cv.width, H2=r.cv.height, B2=16;
               const dd2=r.cv.getContext('2d').getImageData(0,0,W2,H2).data;
               let bad=0,chk=0;
-              for(let by=0;by<H2/B2;by+=2) for(let bx=0;bx<W2/B2;bx+=2){
+              const bT2=Math.floor((H2/B2)*0.17), bB2=Math.ceil((H2/B2)*0.83);
+              for(let by=bT2;by<bB2;by+=2) for(let bx=0;bx<W2/B2;bx+=2){
                 let s1=0,s2=0,n=0;
                 for(let sy=2;sy<B2;sy+=4) for(let sx=2;sx<B2;sx+=4){
                   const idx=((by*B2+sy)*W2+(bx*B2+sx))*4; const v=dd2[idx+3]; s1+=v; s2+=v*v; n++; }
                 const mn=s1/n, sd=Math.sqrt(Math.max(0,s2/n-mn*mn));
-                chk++; if(mn>243&&sd<1.8) bad++;
+                chk++; if(sd<0.6&&mn>30) bad++;
               }
               return bad/Math.max(1,chk) < 0.006;
             }catch(e){ return true; } })();
