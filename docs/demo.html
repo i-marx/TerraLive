@@ -404,7 +404,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r99';
+window._TERRA_REV = 'r100';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -590,7 +590,7 @@ function repairCloudCanvas(im, donor){
   const keep=new Uint8Array(BW*BH);
   const depth=new Int16Array(BW*BH).fill(-1);
   const queue=[];
-  let kept=0;
+  let kept=0, keptStrict=0;
   const stepEdge=function(q){ const bx=q%BW; const m0=mean[q];
     const nb=[q-1,q+1,q-BW,q+BW];
     for(let k=0;k<4;k++){ const p2=nb[k]; if(p2<0||p2>=BW*BH) continue;
@@ -598,7 +598,7 @@ function repairCloudCanvas(im, donor){
       if(Math.abs(m0-mean[p2])>34) return true; }
     return false; };
   for(let q=0; q<BW*BH; q++){
-    if((mean[q]>243 && sdA[q]<1.8) || (mean[q]>205 && sdA[q]<5.0 && stepEdge(q))){ depth[q]=0; keep[q]=1; kept++; queue.push(q); }
+    if((mean[q]>243 && sdA[q]<1.8) || (mean[q]>205 && sdA[q]<5.0 && stepEdge(q))){ depth[q]=0; keep[q]=1; kept++; if(mean[q]>243 && sdA[q]<1.8) keptStrict++; queue.push(q); }
   }
   let qi=0;
   while(qi<queue.length){
@@ -655,7 +655,7 @@ function repairCloudCanvas(im, donor){
     cx.putImageData(dd, 0, 0);
   }
   try{ applyPolarCloudsTL(cv); }catch(e){} if(!(_polarCld.n||_polarCld.s)){ __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84); }
-  return { cv: cv, frac: kept/(BW*BH) };
+  return { cv: cv, frac: keptStrict/(BW*BH) };
 }
 function texFromCloudCanvas(cv){ window._cloudCvRef=cv; window._cloudTexW=cv.width;
   const t=new THREE.CanvasTexture(cv);
