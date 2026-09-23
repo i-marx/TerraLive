@@ -404,7 +404,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r97';
+window._TERRA_REV = 'r98';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -651,7 +651,7 @@ function repairCloudCanvas(im, donor){
   try{ applyPolarCloudsTL(cv); }catch(e){} if(!(_polarCld.n||_polarCld.s)){ __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84); }
   return { cv: cv, frac: kept/(BW*BH) };
 }
-function texFromCloudCanvas(cv){ window._cloudCvRef=cv;
+function texFromCloudCanvas(cv){ window._cloudCvRef=cv; window._cloudTexW=cv.width;
   const t=new THREE.CanvasTexture(cv);
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
   t.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -975,7 +975,7 @@ const earthMat = new THREE.ShaderMaterial({
     uniform sampler2D regDay; uniform sampler2D regNight;
     uniform float uHasRegD; uniform float uHasRegN; uniform vec4 uReg;
     uniform sampler2D regOut; uniform float uHasRegO; uniform vec4 uRegO;
-    uniform vec3 uMoonDir; uniform float uMoonAmt;
+    uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb;
     uniform sampler2D snowMap; uniform float uHasSnow;
     uniform float uLook;
     uniform sampler2D iceMap; uniform float uHasIce; uniform float uGlint;
@@ -1151,7 +1151,7 @@ scene.add(earth);
 
 /* ---------- clouds ---------- */
 const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value },
-  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt };
+  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 } };
 const cloudMat = new THREE.ShaderMaterial({
   uniforms: cloudUniforms, transparent: true, depthWrite: false,
   vertexShader: `
@@ -1162,7 +1162,7 @@ const cloudMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
-    uniform vec3 uMoonDir; uniform float uMoonAmt;
+    uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb;
     varying vec3 vN; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
@@ -1185,7 +1185,7 @@ const cloudMat = new THREE.ShaderMaterial({
       vec3 northE = cross(n, eastE);
       vec2 sunUV = vec2(dot(sunDir, eastE), dot(sunDir, northE)) * 0.0035;
       float aTo = texture2D(map, vUv + vec2(-sunUV.x, sunUV.y)).a;
-      float emb = clamp((a - aTo) * 2.2, -1.0, 1.0);
+      float emb = clamp((a - aTo) * 2.2 * uEmb, -1.0, 1.0);
       float embLit = 1.0 + 0.35*max(emb, 0.0) - 0.30*max(-emb, 0.0);
       vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 * embLit + 0.005);
       /* night clouds are moonlit: bright grey-blue decks under a full moon,
@@ -1439,6 +1439,7 @@ let _cosmosMesh=null;
 if(CFG.cosmos){ try{
   const _applyCosmos=function(t){ try{
     t.wrapS=THREE.RepeatWrapping; t.repeat.x=-1;
+    try{ t.anisotropy=Math.min(8, renderer.capabilities.getMaxAnisotropy()); t.minFilter=THREE.LinearMipmapLinearFilter; }catch(e){}
     const m=new THREE.MeshBasicMaterial({ map:t, side:THREE.BackSide, depthWrite:false });
     m.color.setRGB(1.35,1.32,1.40);
     const mesh=new THREE.Mesh(new THREE.SphereGeometry(CFG.starSphereR*1.05, 64, 32), m);
@@ -1914,6 +1915,7 @@ function updateExtras(gm, sd, mdU, illum){
   earthUniforms.uMoonAmt.value=illum;
   earthUniforms.uLook.value=CFG.look||0;
   earthUniforms.uGlint.value=CFG.glint||0;
+  try{ cloudUniforms.uEmb.value = ((window._cloudTexW||4096) >= 4096) ? 1.0 : 0.4; }catch(e){}
   /* the Sun at its true place in the sky */
   if(sunCore){
     const R=CFG.starSphereR*0.94;
