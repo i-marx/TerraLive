@@ -89,6 +89,7 @@ const CFG = {
     CFG.rot = 0;
     if(q.has('rot')) CFG.rot = q.get('rot')==='1' ? 1 : 0;
     if(q.has('rotspd')){ const rv=parseFloat(q.get('rotspd')); if(isFinite(rv)) CFG.rotSpd = rv; }
+    CFG.cosmos = q.get('cosmos')==='1' ? 1 : 0;
     CFG.intro = 1;
     if(q.has('intro')) CFG.intro = q.get('intro')==='0' ? 0 : 1;
     if(CFG.demo) CFG.intro = 0;
@@ -403,7 +404,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r96';
+window._TERRA_REV = 'r97';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1430,6 +1431,32 @@ const planetSprites = {};
     scene.add(sp);
   }
 })();
+
+/* ---- LONG EXPOSURE COSMOS: real all-sky Milky Way panorama.
+   Imagery: ESO/S. Brunier (CC BY 4.0). Oriented galactic->equatorial so it
+   aligns with the Hipparcos stars. ---- */
+let _cosmosMesh=null;
+if(CFG.cosmos){ try{
+  const _applyCosmos=function(t){ try{
+    t.wrapS=THREE.RepeatWrapping; t.repeat.x=-1;
+    const m=new THREE.MeshBasicMaterial({ map:t, side:THREE.BackSide, depthWrite:false });
+    m.color.setRGB(1.35,1.32,1.40);
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(CFG.starSphereR*1.05, 64, 32), m);
+    mesh.renderOrder=-10;
+    const gp=radecToArr(192.8595, 27.1284);
+    const gc=radecToArr(266.4050, -28.9362);
+    const zg=new THREE.Vector3(gp[0],gp[1],gp[2]).normalize();
+    let xg=new THREE.Vector3(gc[0],gc[1],gc[2]).normalize();
+    const yg=new THREE.Vector3().crossVectors(zg,xg).normalize();
+    xg=new THREE.Vector3().crossVectors(yg,zg).normalize();
+    const M=new THREE.Matrix4().makeBasis(xg, zg, yg.clone().negate());
+    mesh.quaternion.setFromRotationMatrix(M);
+    scene.add(mesh); _cosmosMesh=mesh;
+  }catch(e){} };
+  new THREE.TextureLoader().load('cosmos.jpg', _applyCosmos, undefined, function(){
+    try{ const l2=new THREE.TextureLoader(); l2.setCrossOrigin('anonymous');
+      l2.load('https://i-marx.github.io/TerraLive/cosmos.jpg', _applyCosmos, undefined, function(){}); }catch(e){} });
+}catch(e){} }
 
 /* ============ LIVING PLANET: aurora, lightning, ISS, disasters, meteors ============
    Every module is isolated: any feed failure or parse error silently degrades to
