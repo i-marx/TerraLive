@@ -21,6 +21,7 @@ object Wallpapers {
     const val KEY_MOTION = "motion_parallax"  // Boolean, default true
     const val KEY_WAKE = "wake_spin"          // Boolean (retired)
     const val KEY_ROT = "slow_rotation"       // Boolean, default false
+    const val KEY_COSMOS = "cosmos_sky"        // Boolean, default false
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
@@ -50,9 +51,10 @@ object Wallpapers {
         val look = p.getInt(KEY_LOOK, 3)
         val mot = if (p.getBoolean(KEY_MOTION, true)) 1 else 0
         val rt = if (p.getBoolean(KEY_ROT, false)) 1 else 0
+        val cz = if (p.getBoolean(KEY_COSMOS, false)) 1 else 0
         val lat = p.getFloat(KEY_LAT, Float.NaN)
         val lon = p.getFloat(KEY_LON, Float.NaN)
-        val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot).append("&rot=").append(rt)
+        val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot).append("&rot=").append(rt).append("&cosmos=").append(cz)
         if (mode != "full" && !lat.isNaN() && !lon.isNaN())
             qs.append("&mode=").append(mode).append("&lat=").append(lat).append("&lon=").append(lon)
         return base + qs.toString()
