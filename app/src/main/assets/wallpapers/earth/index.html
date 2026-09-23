@@ -404,7 +404,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r98';
+window._TERRA_REV = 'r99';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -591,8 +591,14 @@ function repairCloudCanvas(im, donor){
   const depth=new Int16Array(BW*BH).fill(-1);
   const queue=[];
   let kept=0;
+  const stepEdge=function(q){ const bx=q%BW; const m0=mean[q];
+    const nb=[q-1,q+1,q-BW,q+BW];
+    for(let k=0;k<4;k++){ const p2=nb[k]; if(p2<0||p2>=BW*BH) continue;
+      if(k<2 && Math.abs((p2%BW)-bx)>1) continue;
+      if(Math.abs(m0-mean[p2])>34) return true; }
+    return false; };
   for(let q=0; q<BW*BH; q++){
-    if(mean[q]>243 && sdA[q]<1.8){ depth[q]=0; keep[q]=1; kept++; queue.push(q); }
+    if((mean[q]>243 && sdA[q]<1.8) || (mean[q]>205 && sdA[q]<5.0 && stepEdge(q))){ depth[q]=0; keep[q]=1; kept++; queue.push(q); }
   }
   let qi=0;
   while(qi<queue.length){
@@ -892,7 +898,7 @@ function loadCloudsLive(){
               try{ idbPut('clouds', null); }catch(e){}
               if(window._modelCloudCv){ if(!window._cloudRetryOn){ window._cloudRetryOn=true; setTimeout(function(){ window._cloudRetryOn=false; try{ refreshClouds(); }catch(e){} }, 15*60*1000); } res(texFromCloudCanvas(window._modelCloudCv)); return; }
             }
-            if(!donor && r.frac > 0.05*FR && window._modelCloudCv){
+            if(!donor && r.frac > 0.12*FR && window._modelCloudCv){
               res(texFromCloudCanvas(window._modelCloudCv)); return;
             }
             if(outOk && r.frac < 0.02*FR){
