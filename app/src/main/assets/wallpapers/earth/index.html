@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r94';
+window._TERRA_REV = 'r95';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -2215,7 +2215,7 @@ function update(){
 
   /* Earth rotation: Greenwich meridian sits at RA = GMST */
   const gmR = gmstDeg(n) * D2R;
-  const gm = gmR + _spin;
+  const gm = gmR;
   earth.rotation.y  = gm;
   /* live satellite clouds are already where they really are - no artificial drift */
   const drift = liveClouds ? (CFG.demo ? _demoE*0.045 : 0) : (n * 0.22) % (Math.PI*2);
@@ -2225,11 +2225,7 @@ function update(){
   /* Sun */
   const s = sunEcl(n);
   const sd = eclToArr(s.lam, 0, n);
-  if(_spin !== 0){
-    const saD = _spin * 0.3, cSD = Math.cos(saD), sSD = Math.sin(saD);
-    const sx0 = sd[0]*cSD + sd[2]*sSD, sz0 = -sd[0]*sSD + sd[2]*cSD;
-    sd[0] = sx0; sd[2] = sz0;
-  }
+  
   earthUniforms.sunDir.value.set(sd[0], sd[1], sd[2]);
   /* sharp lights when far, smooth blurred glow when zoomed in close */
   earthUniforms.uNightBlur.value = (CFG.mode === 'closeup') ? 2.2 : 0.6;
@@ -2265,7 +2261,7 @@ function update(){
        (which co-rotates with the spin -> globe still, Sun sweeps). It looks
        toward the horizon so the surface fills the frame with the limb + space
        in the upper-left. Framing verified against ISS reference imagery. */
-    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gmR));
+    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gmR + _spin));
     const E = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), Lp).normalize();
     const N = new THREE.Vector3().crossVectors(Lp, E);
     const az = CFG.cuAzimuth*D2R, ld = CFG.cuLookDown*D2R, roll = CFG.cuRoll*D2R;
@@ -2299,7 +2295,7 @@ function update(){
       alpha -= 7.0*_demoE;                                /* slow orbital drift: stars sweep */
       cD = camDist*(1.03 - 0.06*Math.sin(_demoE*3.14159));/* gentle dolly in and back out */
     }
-    const cd = eclToArr(s.lam - alpha, 0, n);
+    const cd = eclToArr(s.lam - alpha - _spin*R2D, 0, n);
     camera.position.set(cd[0]*cD, cd[1]*cD, cd[2]*cD);
     setFromArr(camera.up, eclNorthArr(n));
     applyParallax(0.075);
