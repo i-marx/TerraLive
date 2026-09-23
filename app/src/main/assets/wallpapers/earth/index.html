@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r95';
+window._TERRA_REV = 'r96';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1070,7 +1070,8 @@ const earthMat = new THREE.ShaderMaterial({
         vec4 ct = texture2D(cloudMap, suv);
         float csh = clamp((ct.r*ct.a - 0.10) * 1.11, 0.0, 1.0);
         float latFade = smoothstep(0.20, 0.40, cosLat);
-        col *= 1.0 - csh * 0.45 * dmix * latFade;
+        float grz = 1.0 + 1.2*(1.0 - smoothstep(0.05, 0.45, dot(n, sunDir)));
+        col *= 1.0 - min(0.62, csh * 0.45 * grz) * dmix * latFade;
       }
       /* ocean sun glint (opt-in): rough-sea sheen + tighter specular core */
       if(uGlint > 0.5 && uHasWater > 0.5){
@@ -1178,7 +1179,14 @@ const cloudMat = new THREE.ShaderMaterial({
       /* pole fade removed: polar rows carry real model cloud data now */
       /* day: bright sunlit tops.  night: dark slate cloud that still blocks
          the city lights beneath, so weather is visible on the dark side too. */
-      vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 + 0.005);
+      /* volume emboss: sample cloud density toward the sun; lit edges pop, far sides self-shade */
+      vec3 eastE = normalize(cross(vec3(0.0,1.0,0.0), n) + vec3(1e-5));
+      vec3 northE = cross(n, eastE);
+      vec2 sunUV = vec2(dot(sunDir, eastE), dot(sunDir, northE)) * 0.0035;
+      float aTo = texture2D(map, vUv + vec2(-sunUV.x, sunUV.y)).a;
+      float emb = clamp((a - aTo) * 2.2, -1.0, 1.0);
+      float embLit = 1.0 + 0.35*max(emb, 0.0) - 0.30*max(-emb, 0.0);
+      vec3 dayC   = vec3(1.0, 0.995, 0.98) * (l * 2.6 * embLit + 0.005);
       /* night clouds are moonlit: bright grey-blue decks under a full moon,
          faint slate at new moon - so weather never just evaporates at night */
       float mlit = max(dot(n, uMoonDir), 0.0);
