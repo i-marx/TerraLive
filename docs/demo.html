@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r102';
+window._TERRA_REV = 'r103';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1895,7 +1895,7 @@ function updateExtras(gm, sd, mdU, illum){
   earthUniforms.uMoonAmt.value=illum;
   earthUniforms.uLook.value=CFG.look||0;
   earthUniforms.uGlint.value=CFG.glint||0;
-  try{ cloudUniforms.uEmb.value = ((window._cloudTexW||4096) >= 4096) ? 1.0 : 0.4; }catch(e){}
+  try{ const _ci=cloudUniforms.map.value && cloudUniforms.map.value.image; cloudUniforms.uEmb.value = (_ci && _ci.width >= 4096) ? 1.0 : 0.4; }catch(e){}
   /* the Sun at its true place in the sky */
   if(sunCore){
     const R=CFG.starSphereR*0.94;
