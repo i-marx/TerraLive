@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r103';
+window._TERRA_REV = 'r104';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -777,15 +777,22 @@ function applyPolarCloudsTL(cv){ try{
       for(let x=0;x<W;x+=4){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
         em+=dd2[eo+3]; en++; mm+=ud[uo+3]; mn++; } }
     let scale=1; if(mn>50 && mm/mn>2) scale=Math.min(1.6, Math.max(0.55, (em/Math.max(1,en))/(mm/mn)));
+    /* organic breakup: wrapped multi-octave value noise so the cap reads as real
+       cloud masses instead of a uniform smear; mean stays ~1 so cover is honest */
+    const mkN=function(L){ const pts=new Float32Array(L); for(let q2=0;q2<L;q2++) pts[q2]=Math.random(); return function(xx){ const f2=((xx/W*L)%L+L)%L, i0=Math.floor(f2), i1=(i0+1)%L, tt=f2-i0, u=tt*tt*(3-2*tt); return pts[i0]*(1-u)+pts[i1]*u; }; };
+    const mkR=function(L,amp){ const pts=new Float32Array(L+2); for(let q2=0;q2<L+2;q2++) pts[q2]=(Math.random()-0.5)*amp; return function(yy){ const f2=yy/Math.max(1,rows)*L, i0=Math.floor(f2), tt=f2-i0, u=tt*tt*(3-2*tt); return pts[i0]*(1-u)+pts[Math.min(L+1,i0+1)]*u; }; };
+    const nx1=mkN(9), nx2=mkN(23), nx3=mkN(53);
+    const sh1=mkR(7, W*0.16), sh2=mkR(13, W*0.09), sh3=mkR(21, W*0.05);
     for(let y=0;y<rows;y++){
       const gy=y0+y; const latAbs=north? 90-((gy+0.5)/H)*180 : ((gy+0.5)/H)*180-90;
       let t2=(latAbs-73.5)/4.5; t2=Math.max(0,Math.min(1,t2)); t2=t2*t2*(3-2*t2);
       if(t2<=0) continue;
       const uy=north? y : rows-1-y;
+      const s1v=sh1(y), s2v=sh2(y), s3v=sh3(y);
       for(let x=0;x<W;x++){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
-        const fx=x/W*6.28318;
-        const nz=1+0.13*(Math.sin(fx*6+p1)+Math.sin(fx*11+p2))*0.5;
-        const mA=Math.min(255, ud[uo+3]*scale*nz);
+        const nn=0.5*nx1(x+s1v)+0.3*nx2(x+s2v)+0.2*nx3(x+s3v);
+        const mult=0.42+1.16*Math.pow(nn,1.6);
+        const mA=Math.min(255, ud[uo+3]*scale*mult);
         const dth=(Math.random()-0.5)*3;
         dd2[eo]  =Math.round(dd2[eo]  *(1-t2)+255*t2);
         dd2[eo+1]=Math.round(dd2[eo+1]*(1-t2)+255*t2);
@@ -798,7 +805,7 @@ function applyPolarCloudsTL(cv){ try{
   /* exact-pole rows must be constant: flatten to wrap-safe row means */
   const flat=function(north){ try{
     const W=cv.width, H=cv.height, cx3=cv.getContext('2d');
-    const nR=Math.max(2,Math.round((1.5/180)*H));
+    const nR=Math.max(2,Math.round((0.6/180)*H));
     const y0=north?0:H-nR;
     const id3=cx3.getImageData(0,y0,W,nR), d3=id3.data;
     for(let y=0;y<nR;y++){ let r=0,g=0,b=0,a2=0; const off=y*W*4;
@@ -807,7 +814,7 @@ function applyPolarCloudsTL(cv){ try{
       const dp=north? y : nR-1-y; const t3=1-Math.min(1, dp/nR);
       for(let x=0;x<W;x++){ const o=off+x*4; const dth=(Math.random()-0.5)*2.5;
         d3[o]  +=(r-d3[o])*t3+dth; d3[o+1]+=(g-d3[o+1])*t3+dth;
-        d3[o+2]+=(b-d3[o+2])*t3+dth; d3[o+3]+=(a2-d3[o+3])*t3; } }
+        d3[o+2]+=(b-d3[o+2])*t3+dth; d3[o+3]+=(a2-d3[o+3])*t3*0.75; } }
     cx3.putImageData(id3,0,y0);
   }catch(e){} };
   flat(true); flat(false);
@@ -1487,17 +1494,17 @@ function paintAurora(coords){
     }
   }
   gx.putImageData(img,0,0);
-  const W=512, H=256;
+  const W=1024, H=512;
   /* wrap-aware smoothing: tile x3 so the +-180 ends meet seamlessly */
   const t3=document.createElement('canvas'); t3.width=GW*3; t3.height=GH;
   const t3x=t3.getContext('2d'); t3x.drawImage(grid,0,0); t3x.drawImage(grid,GW,0); t3x.drawImage(grid,GW*2,0);
   const big=document.createElement('canvas'); big.width=W*3; big.height=H;
   const bx=big.getContext('2d'); bx.imageSmoothingEnabled=true;
   bx.drawImage(t3,0,0,GW*3,GH,0,0,W*3,H);
-  const sm=document.createElement('canvas'); sm.width=288; sm.height=48;
+  const sm=document.createElement('canvas'); sm.width=576; sm.height=96;
   const sx=sm.getContext('2d'); sx.imageSmoothingEnabled=true;
-  sx.drawImage(big,0,0,W*3,H,0,0,288,48);
-  bx.clearRect(0,0,W*3,H); bx.drawImage(sm,0,0,288,48,0,0,W*3,H);
+  sx.drawImage(big,0,0,W*3,H,0,0,576,96);
+  bx.clearRect(0,0,W*3,H); bx.drawImage(sm,0,0,576,96,0,0,W*3,H);
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const cx=cv.getContext('2d'); cx.drawImage(big, W, 0, W, H, 0, 0, W, H);
   /* polar convergence: aurora fades out cleanly at the exact poles */
@@ -1517,9 +1524,11 @@ function paintAurora(coords){
       for(let j=0;j<H;j++){ const g=dd[(j*W+i)*4+1]; if(j<H/2){ if(g>gN){gN=g;bcN=j;} } else { if(g>gS){gS=g;bcS=j;} } }
       for(let j=0;j<H;j++){
         const o=(j*W+i)*4, g=dd[o+1]; if(!g) continue;
-        const sh=Math.round((wob[j]-0.5)*6), k=Math.min(W-1,Math.max(0,i+sh));
-        let n=0.55*nA[k]+0.30*nB[k]+0.15*nC[k]; n=Math.pow(Math.max(0,Math.min(1,n)),1.25);
-        const e=0.35+0.65*env[k], m=(1-e)+e*(0.30+0.95*n);
+        let kf=i+(wob[j]-0.5)*12; if(kf<0)kf=0; if(kf>W-1.001)kf=W-1.001;
+        const k0=Math.floor(kf), k1=Math.min(W-1,k0+1), ku=kf-k0;
+        let n=0.55*(nA[k0]*(1-ku)+nA[k1]*ku)+0.30*(nB[k0]*(1-ku)+nB[k1]*ku)+0.15*(nC[k0]*(1-ku)+nC[k1]*ku);
+        n=Math.pow(Math.max(0,Math.min(1,n)),1.25);
+        const e=0.35+0.65*env[k0], m=(1-e)+e*(0.30+0.95*n);
         const g2=Math.min(255, g*m*0.95);
         let pole=0;
         if(j<H/2){ if(bcN>=0) pole=Math.max(0,Math.min(1,(bcN-j)/9)); }
@@ -1976,37 +1985,7 @@ function updateExtras(gm, sd, mdU, illum){
 
 /* ---------- DEEP SKY: real Milky Way panorama + real star clusters ---------- */
 try{ CFG.expo = 1; }catch(e){}
-try{
-  const CLUSTERS=[
-    [56.75, 24.12, 60, 1.1, 6, 0.9],
-    [66.75, 15.87, 40, 2.4, 6, 0.7],
-    [130.1, 19.67, 45, 1.0, 5, 0.7],
-    [34.75, 57.13, 70, 0.9, 5, 0.8],
-    [250.42, 36.46, 80, 0.5, 4, 0.8],
-    [201.7, -47.48, 90, 0.6, 5, 0.9],
-    [6.02, -72.08, 80, 0.5, 4, 0.8],
-    [268.5, -34.8, 50, 1.2, 5, 0.7]
-  ];
-  const gtc=glowTexture();
-  for(const cl of CLUSTERS){
-    const g=new THREE.BufferGeometry();
-    const pos=new Float32Array(cl[2]*3);
-    const base=radecToArr(cl[0], cl[1]);
-    const bv=new THREE.Vector3(base[0], base[1], base[2]).normalize();
-    const t1=new THREE.Vector3(0,1,0).cross(bv).normalize();
-    const t2=new THREE.Vector3().crossVectors(bv, t1);
-    for(let i=0;i<cl[2];i++){
-      const r1=(Math.random()+Math.random()+Math.random()-1.5)/1.5*cl[3]*Math.PI/180;
-      const r2=(Math.random()+Math.random()+Math.random()-1.5)/1.5*cl[3]*Math.PI/180;
-      const dv=bv.clone().addScaledVector(t1, r1).addScaledVector(t2, r2).normalize();
-      pos[i*3]=dv.x*3000; pos[i*3+1]=dv.y*3000; pos[i*3+2]=dv.z*3000;
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mm=new THREE.PointsMaterial({ map:gtc, color:0xdfe8ff, size:cl[4], sizeAttenuation:false,
-      transparent:true, opacity:cl[5]*0.75, depthWrite:false, blending:THREE.AdditiveBlending });
-    scene.add(new THREE.Points(g, mm));
-  }
-}catch(e){}
+
 
 /* ---------- load imagery ---------- */
 /* Close-up only: fetch 500m/px NASA GIBS imagery for the region around the
