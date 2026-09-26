@@ -62,6 +62,7 @@ class EarthWallpaperService : WallpaperService() {
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             Wallpapers.registerListener(this@EarthWallpaperService, prefListener)
+            try { val p = Wallpapers.prefs(this@EarthWallpaperService); if (p.getLong("first_set_ts", 0L) == 0L) p.edit().putLong("first_set_ts", System.currentTimeMillis()).apply() } catch (_: Exception) {}
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
