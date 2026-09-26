@@ -107,7 +107,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() { super.onPause(); findViewById<WebView>(R.id.bgEarth)?.onPause() }
-    override fun onResume() { super.onResume(); findViewById<WebView>(R.id.bgEarth)?.onResume() }
+    override fun onResume() { super.onResume(); findViewById<WebView>(R.id.bgEarth)?.onResume(); maybeAskReview() }
+
+    /* Ask for a Play rating once, after the wallpaper has been set for 3+ days */
+    private fun maybeAskReview() {
+        try {
+            val p = Wallpapers.prefs(this)
+            val first = p.getLong("first_set_ts", 0L)
+            if (first == 0L || p.getBoolean("review_asked", false)) return
+            if (System.currentTimeMillis() - first < 3L * 24 * 3600 * 1000) return
+            val mgr = com.google.android.play.core.review.ReviewManagerFactory.create(this)
+            mgr.requestReviewFlow().addOnCompleteListener { t ->
+                if (t.isSuccessful) {
+                    p.edit().putBoolean("review_asked", true).apply()
+                    try { mgr.launchReviewFlow(this, t.result) } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+    }
 
     private fun dp(v: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics).toInt()
