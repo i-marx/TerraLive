@@ -403,7 +403,7 @@ const URLS = {
   window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r104';
+window._TERRA_REV = 'r105';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -777,22 +777,24 @@ function applyPolarCloudsTL(cv){ try{
       for(let x=0;x<W;x+=4){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
         em+=dd2[eo+3]; en++; mm+=ud[uo+3]; mn++; } }
     let scale=1; if(mn>50 && mm/mn>2) scale=Math.min(1.6, Math.max(0.55, (em/Math.max(1,en))/(mm/mn)));
-    /* organic breakup: wrapped multi-octave value noise so the cap reads as real
-       cloud masses instead of a uniform smear; mean stays ~1 so cover is honest */
-    const mkN=function(L){ const pts=new Float32Array(L); for(let q2=0;q2<L;q2++) pts[q2]=Math.random(); return function(xx){ const f2=((xx/W*L)%L+L)%L, i0=Math.floor(f2), i1=(i0+1)%L, tt=f2-i0, u=tt*tt*(3-2*tt); return pts[i0]*(1-u)+pts[i1]*u; }; };
-    const mkR=function(L,amp){ const pts=new Float32Array(L+2); for(let q2=0;q2<L+2;q2++) pts[q2]=(Math.random()-0.5)*amp; return function(yy){ const f2=yy/Math.max(1,rows)*L, i0=Math.floor(f2), tt=f2-i0, u=tt*tt*(3-2*tt); return pts[i0]*(1-u)+pts[Math.min(L+1,i0+1)]*u; }; };
-    const nx1=mkN(9), nx2=mkN(23), nx3=mkN(53);
-    const sh1=mkR(7, W*0.16), sh2=mkR(13, W*0.09), sh3=mkR(21, W*0.05);
+    /* organic breakup: true 2D wrapped value noise so the cap reads as real
+       cloud masses; 1D row-shifted noise made horizontal worm stripes */
+    const mk2=function(Lx,Ly){ const pts=new Float32Array(Lx*Ly); for(let q2=0;q2<Lx*Ly;q2++) pts[q2]=Math.random();
+      return function(xx,yy){ const fx=((xx/W*Lx)%Lx+Lx)%Lx, fy=Math.max(0,Math.min(Ly-1.001,yy/Math.max(1,rows)*Ly));
+        const x0=Math.floor(fx), x1=(x0+1)%Lx, y0q=Math.floor(fy), y1q=Math.min(Ly-1,y0q+1);
+        const tx=fx-x0, ty=fy-y0q, uxs=tx*tx*(3-2*tx), uys=ty*ty*(3-2*ty);
+        const av=pts[y0q*Lx+x0]*(1-uxs)+pts[y0q*Lx+x1]*uxs, bv=pts[y1q*Lx+x0]*(1-uxs)+pts[y1q*Lx+x1]*uxs;
+        return av*(1-uys)+bv*uys; }; };
+    const n2a=mk2(14,5), n2b=mk2(34,11), n2c=mk2(80,26);
     for(let y=0;y<rows;y++){
       const gy=y0+y; const latAbs=north? 90-((gy+0.5)/H)*180 : ((gy+0.5)/H)*180-90;
       let t2=(latAbs-73.5)/4.5; t2=Math.max(0,Math.min(1,t2)); t2=t2*t2*(3-2*t2);
       if(t2<=0) continue;
       const uy=north? y : rows-1-y;
-      const s1v=sh1(y), s2v=sh2(y), s3v=sh3(y);
       for(let x=0;x<W;x++){ const eo=(y*W+x)*4, uo=(uy*W+x)*4;
-        const nn=0.5*nx1(x+s1v)+0.3*nx2(x+s2v)+0.2*nx3(x+s3v);
-        const mult=0.42+1.16*Math.pow(nn,1.6);
-        const mA=Math.min(255, ud[uo+3]*scale*mult);
+        const nn=0.5*n2a(x,y)+0.3*n2b(x,y)+0.2*n2c(x,y);
+        const mult=0.35+1.30*Math.pow(nn,1.7);
+        const mA=Math.min(255, Math.pow(ud[uo+3]/255,0.85)*255*scale*mult);
         const dth=(Math.random()-0.5)*3;
         dd2[eo]  =Math.round(dd2[eo]  *(1-t2)+255*t2);
         dd2[eo+1]=Math.round(dd2[eo+1]*(1-t2)+255*t2);
