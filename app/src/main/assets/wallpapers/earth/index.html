@@ -400,10 +400,11 @@ const URLS = {
                   'https://unpkg.com/three-globe/example/img/earth-night.jpg',
                   'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'];
   }
-  window.__gibs8 = (CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
+  window.__gibs8 = (!window.__PUB && CFG.mode!=='closeup' && _gibsW>=8192) ? gibsWorld('BlueMarble_NextGeneration') : null;
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
-window._TERRA_REV = 'r106';
+window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
+window._TERRA_REV = 'r107';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -418,7 +419,8 @@ try{
 let liveClouds = false;
 function liveCloudURLs(){  // cache-bust once per update window so new satellite data comes through
   const t = Math.floor(Date.now()/CFG.cloudRefresh);
-  return URLS.cloudsLive.map(u=>u+'?t='+t);
+  const list = window.__PUB ? URLS.cloudsLive.filter(u=>u.indexOf('2048x1024')>=0) : URLS.cloudsLive;
+  return list.map(u=>u+'?t='+t);
 }
 /* The live cloud composite ships with real defects: corrupt saturated tile
    blocks (hard staircase edges) and mirror-filled polar strips. Every download
@@ -1997,6 +1999,7 @@ try{ CFG.expo = 1; }catch(e){}
 /* Close-up only: fetch 500m/px NASA GIBS imagery for the region around the
    user's location and hand it to the shader as a hi-res patch. */
 function loadRegional(){
+  if(window.__PUB) return;   /* browser preview: regional hi-res is app-only */
   if(CFG.mode !== 'closeup') return;
   const mkBox=(ext)=>{
     let la0=CFG.userLat-ext, la1=CFG.userLat+ext;
