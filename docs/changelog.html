@@ -1,0 +1,19 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog | Earth Live Wallpaper: Terra</title>
+<meta name="description" content="Development log for Terra, the Android earth live wallpaper that renders the real planet from live satellite data. Every update, honestly documented.">
+<link rel="canonical" href="https://i-marx.github.io/TerraLive/changelog.html">
+<style>:root{--bg:#04070d;--fg:#e8eef6;--dim:#9ab0c8;--acc:#7fd4ff}*{margin:0;box-sizing:border-box}body{background:var(--bg);color:var(--fg);font:16px/1.7 system-ui,Segoe UI,Roboto,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:32px 24px}h1{font-size:30px;margin:18px 0}h2{font-size:19px;color:var(--acc);margin:30px 0 6px}p{color:var(--dim);margin:8px 0}a{color:var(--acc)}</style></head><body><div class="wrap">
+<a href="./">&#8592; Terra</a>
+<h1>Changelog</h1>
+<p>Terra is built by one person with one rule: everything on screen must be real. This log says what changed and why, including the failures.</p>
+<h2>September 2026 - the cloud sharpness war, won</h2>
+<p>The satellite cloud composite sometimes arrives with corrupted tiles. Our repair system was misdiagnosing the cores of real storm systems as corruption and quietly softening them. The detector has been rebuilt around what corruption actually looks like (perfectly flat plateaus, which real clouds never produce), so storm cores now stay razor sharp at full 8K resolution.</p>
+<h2>September 2026 - the poles get real structure</h2>
+<p>Geostationary satellites cannot see the poles, so Terra splices in weather-model cover there. That splice used to read as a smooth cap up close; it now carries organic cloud-mass structure while keeping the model's true cover amounts. Aurora rendering doubled in resolution with smooth curtain rays.</p>
+<h2>September 2026 - light decoupled from spin</h2>
+<p>The optional slow rotation now orbits the camera instead of spinning the planet against its clock, so the day and night line stays astronomically true while the view drifts.</p>
+<h2>August 2026 - real moon, real deep sky</h2>
+<p>The Moon now uses NASA LROC imagery at true scale and phase. Decorative effects were removed rather than polished: if it is not real, it is not in Terra.</p>
+<p style="margin-top:34px"><a href="https://play.google.com/store/apps/details?id=com.terralive.wallpapers">Earth live wallpaper Terra on Google Play</a> &#183; <a href="demo.html">Live browser demo</a></p>
+</div></body></html>
