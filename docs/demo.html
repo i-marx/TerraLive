@@ -407,7 +407,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r122';
+window._TERRA_REV = 'r123';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1761,7 +1761,7 @@ if(CFG.mode==='sky'){ try{
       try{ tex.anisotropy=renderer.capabilities.getMaxAnisotropy(); }catch(e){}
       if(cloudUniforms.skyTex.value && cloudUniforms.skyTex.value.dispose) cloudUniforms.skyTex.value.dispose();
       cloudUniforms.skyTex.value=tex;
-      cloudUniforms.uWinC.value.set(uc, vc);
+      cloudUniforms.uWinC.value.set(uc, 1-vc);   /* mesh v runs south->north, canvas rows north->south */
       cloudUniforms.uWinS.value=360/(EXT*2);
       window._skyBaked=(window._skyBaked||0)+1;
     }catch(e){}
