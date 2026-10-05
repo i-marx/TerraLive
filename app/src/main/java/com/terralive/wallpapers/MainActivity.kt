@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
 
     private val locationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) applyMode(pendingMode)
+            if (granted) { if (pendingMode == "skyloc") applySkyLocation() else applyMode(pendingMode) }
             else {
                 Wallpapers.setMode(this, "full")
                 Toast.makeText(this, "Location permission is needed to centre Earth on your place", Toast.LENGTH_LONG).show()
@@ -193,6 +193,14 @@ class MainActivity : AppCompatActivity() {
             gravity = android.view.Gravity.CENTER
             setPadding(0, dp(12f), 0, 0)
         })
+        listView.addView(TextView(this).apply {
+            text = "vc" + BuildConfig.VERSION_CODE + " (" + BuildConfig.BUILD_DATE + ")"
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
+            textSize = 11f
+            letterSpacing = 0.08f
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, dp(18f), 0, dp(8f))
+        })
     }
 
     private fun openSheet() {
@@ -295,16 +303,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fillSheet(body: LinearLayout) {
-        body.addView(TextView(this).apply {
-            text = "EARTH"
-            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text))
-            textSize = 16f
-            letterSpacing = 0.30f
-            light(this)
-        })
+        if (Wallpapers.selected(this) == "sky") { fillSkySheet(body); return }
+        body.addView(sheetTitle("EARTH"))
         val currentMode0 = Wallpapers.viewMode(this)
-        val currentMode = if (currentMode0 == "locked") "closeup" else currentMode0
-        sectionLabel(body, "THE PLANET")
+        val currentMode1 = if (currentMode0 == "locked") "closeup" else currentMode0
+        val currentMode = if (currentMode1 == "sky") "full" else currentMode1
+        sectionLabel(body, "VIEW")
         val planetModes = listOf(
             Triple("full", "Full view", "Earth from deep space, real day and night"),
             Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain")
@@ -312,22 +316,6 @@ class MainActivity : AppCompatActivity() {
         for ((id, title, sub) in planetModes) {
             val on = id == currentMode
             body.addView(optionCard(on, title, sub) { selectMode(id) })
-        }
-        sectionLabel(body, "CLOUDS VIEW")
-        body.addView(optionCard(currentMode == "sky", "Clouds above me",
-            "Look straight up: live clouds, rain and snow, the night sky with zero light pollution") { selectMode("sky") })
-        if (currentMode == "sky") {
-            val pSky = Wallpapers.prefs(this)
-            val satsOn = pSky.getBoolean(Wallpapers.KEY_SKY_SATS, true)
-            body.addView(optionCard(satsOn, "Satellites",
-                "The real ISS crossing your sky, only when it is truly visible") {
-                pSky.edit().putBoolean(Wallpapers.KEY_SKY_SATS, !satsOn).apply(); refreshSheet()
-            })
-            val plnOn = pSky.getBoolean(Wallpapers.KEY_SKY_PLANES, true)
-            body.addView(optionCard(plnOn, "Aircraft overhead",
-                "Live planes above you right now, as moving lights") {
-                pSky.edit().putBoolean(Wallpapers.KEY_SKY_PLANES, !plnOn).apply(); refreshSheet()
-            })
         }
         sectionLabel(body, "EFFECTS")
         val p = Wallpapers.prefs(this)
@@ -341,13 +329,70 @@ class MainActivity : AppCompatActivity() {
             "The planet turns gently on its axis (full view)") {
             p.edit().putBoolean(Wallpapers.KEY_ROT, !rotOn).apply(); refreshSheet()
         })
-        /* version footer: always visible at the bottom of the menu */
+        addVersionFooter(body)
+    }
+
+    private fun sheetTitle(t: String): TextView = TextView(this).apply {
+        text = t
+        setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text))
+        textSize = 16f
+        letterSpacing = 0.30f
+        light(this)
+    }
+
+    private fun fillSkySheet(body: LinearLayout) {
+        body.addView(sheetTitle("SKY VIEW"))
+        val p = Wallpapers.prefs(this)
+        sectionLabel(body, "YOUR SKY")
+        val hasLoc = !p.getFloat(Wallpapers.KEY_LAT, Float.NaN).isNaN()
+        body.addView(optionCard(hasLoc,
+            if (hasLoc) "Location set" else "Use my location",
+            if (hasLoc) "The sky follows your real position. Tap to refresh"
+            else "Needed so the sky above matches yours") { requestSkyLocation() })
+        sectionLabel(body, "ABOVE YOU")
+        val satsOn = p.getBoolean(Wallpapers.KEY_SKY_SATS, true)
+        body.addView(optionCard(satsOn, "Satellites",
+            "The real ISS crossing your sky, only when it is truly visible") {
+            p.edit().putBoolean(Wallpapers.KEY_SKY_SATS, !satsOn).apply(); refreshSheet()
+        })
+        val plnOn = p.getBoolean(Wallpapers.KEY_SKY_PLANES, true)
+        body.addView(optionCard(plnOn, "Aircraft overhead",
+            "Live planes above you right now, as moving lights") {
+            p.edit().putBoolean(Wallpapers.KEY_SKY_PLANES, !plnOn).apply(); refreshSheet()
+        })
+        sectionLabel(body, "EFFECTS")
+        val motionOn = p.getBoolean(Wallpapers.KEY_MOTION, true)
+        body.addView(optionCard(motionOn, "Parallax on tilt",
+            "Your view drifts gently as you move the phone") {
+            p.edit().putBoolean(Wallpapers.KEY_MOTION, !motionOn).apply(); refreshSheet()
+        })
+        addVersionFooter(body)
+    }
+
+    private fun addVersionFooter(body: LinearLayout) {
         val ver = TextView(this)
-        ver.text = try { "Terra " + packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "Terra" }
+        ver.text = "vc" + BuildConfig.VERSION_CODE + " (" + BuildConfig.BUILD_DATE + ")"
         ver.textSize = 12f
         ver.setTextColor(0x66FFFFFF.toInt())
         ver.gravity = android.view.Gravity.CENTER
         ver.setPadding(0, dp(12f), 0, dp(4f))
         body.addView(ver)
+    }
+
+    private fun requestSkyLocation() {
+        if (hasLocationPermission()) applySkyLocation()
+        else { pendingMode = "skyloc"; locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION) }
+    }
+
+    private fun applySkyLocation() {
+        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        val loc = try {
+            lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+        } catch (e: Exception) { null }
+        if (loc != null) Wallpapers.setLocation(this, loc.latitude, loc.longitude)
+        else Toast.makeText(this, "Getting your location. Open Maps once, then tap again", Toast.LENGTH_LONG).show()
+        refreshSheet()
     }
 }
