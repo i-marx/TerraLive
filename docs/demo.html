@@ -92,6 +92,8 @@ const CFG = {
     CFG.intro = 1;
     if(q.has('intro')) CFG.intro = q.get('intro')==='0' ? 0 : 1;
     if(CFG.mode === 'sky') CFG.intro = 0;   /* sky mode starts at the zenith, no flight */
+    CFG.skySats = 1; if(q.has('sats')) CFG.skySats = q.get('sats')==='0' ? 0 : 1;
+    CFG.skyPlanes = 1; if(q.has('planes')) CFG.skyPlanes = q.get('planes')==='0' ? 0 : 1;
     if(CFG.demo) CFG.intro = 0;
     CFG.glint = 1;
     if(q.has('glint')) CFG.glint = q.get('glint')==='0' ? 0 : 1;
@@ -405,7 +407,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r115';
+window._TERRA_REV = 'r116';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1174,7 +1176,7 @@ scene.add(earth);
 
 /* ---------- clouds ---------- */
 const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value },
-  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 }, uSky:{ value: 0.0 } };
+  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 }, uSky:{ value: 0.0 }, uFlash:{ value: 0.0 } };
 const cloudMat = new THREE.ShaderMaterial({
   uniforms: cloudUniforms, transparent: true, depthWrite: false,
   vertexShader: `
@@ -1185,7 +1187,7 @@ const cloudMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
-    uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb; uniform float uSky;
+    uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb; uniform float uSky; uniform float uFlash;
     float h21c(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
     float vn2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
       return mix(mix(h21c(i),h21c(i+vec2(1.0,0.0)),f.x), mix(h21c(i+vec2(0.0,1.0)),h21c(i+vec2(1.0,1.0)),f.x), f.y); }
@@ -1214,8 +1216,9 @@ const cloudMat = new THREE.ShaderMaterial({
         vec3 under=mix(vec3(1.0,1.0,1.0), vec3(0.52,0.56,0.63), aS);
         vec3 cDay=mix(under, vec3(1.0,0.52,0.26), twS*0.6);
         float ml2=max(dot(zen2, uMoonDir), 0.0)*uMoonAmt;
-        vec3 cNight=vec3(0.030,0.036,0.052)+vec3(0.10,0.12,0.16)*ml2;
+        vec3 cNight=vec3(0.052,0.060,0.082)+vec3(0.14,0.16,0.20)*ml2;
         vec3 cS=mix(cNight, cDay, F2);
+        cS += vec3(0.90,0.95,1.05)*uFlash*(0.3+aS);
         gl_FragColor=vec4(cS, clamp(aS*mix(0.92,1.25,F2),0.0,1.0));
         return;
       }
@@ -1644,6 +1647,140 @@ if(CFG.mode==='sky'){ try{
   scene.add(skyDome);
   cloudMat.side=THREE.DoubleSide;
   cloudUniforms.uSky.value=1.0;
+}catch(e){} }
+
+
+/* ---- CLOUDS VIEW, LIVE SKY: real weather, real traffic above the user ----
+   Everything here is live data: Open-Meteo current conditions drive rain,
+   snow and thunderstorm flashes; aircraft are live ADS-B within ~40 nm;
+   the satellite dot is the real ISS, shown only when it is genuinely
+   visible (above your horizon, sunlit, while your sky is dark). */
+if(CFG.mode==='sky'){ try{
+  window._skyWx={rain:0,snow:0,thunder:0,cc:0};
+  const wxPoll=function(){
+    fetch('https://api.open-meteo.com/v1/forecast?latitude='+CFG.userLat+'&longitude='+CFG.userLon+'&current=precipitation,rain,showers,snowfall,weather_code,cloud_cover')
+      .then(function(r){ return r.json(); }).then(function(j){
+        const c=j&&j.current; if(!c) return;
+        const code=c.weather_code||0;
+        const rainI=(c.rain||0)+(c.showers||0)+(((code>=51&&code<=67)||(code>=80&&code<=82))?0.5:0);
+        const snowI=(c.snowfall||0)+(((code>=71&&code<=77)||code===85||code===86)?0.5:0);
+        window._skyWx={ rain:Math.min(1,rainI/3), snow:Math.min(1,snowI/2), thunder:(code>=95)?1:0, cc:(c.cloud_cover||0)/100 };
+      }).catch(function(){});
+  };
+  wxPoll(); setInterval(wxPoll, 10*60*1000);
+
+  const mkPts=function(n, size, col){
+    const g=new THREE.BufferGeometry();
+    const pos=new Float32Array(n*3); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    const m=new THREE.PointsMaterial({ color:col, size:size, sizeAttenuation:true, transparent:true, opacity:0, depthWrite:false });
+    const pts=new THREE.Points(g,m); pts.frustumCulled=false; scene.add(pts);
+    const off=[]; for(let i=0;i<n;i++) off.push({x:(Math.random()*3.2-1.6), y:(Math.random()*3.2-1.6), z:Math.random()*2.4+0.1, ph:Math.random()*6.28});
+    return {pts, off, n};
+  };
+  const rainP=mkPts(420, 0.016, 0xb9c6d4);
+  const snowP=mkPts(260, 0.030, 0xffffff);
+
+  const acPool=[];
+  { const gt2=glowTexture();
+    for(let i=0;i<14;i++){ const m=new THREE.SpriteMaterial({ map:gt2, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, color:new THREE.Color(1,1,1), opacity:0 });
+      const sp=new THREE.Sprite(m); sp.renderOrder=3; sp.scale.set(0.14,0.14,1); scene.add(sp); acPool.push(sp); } }
+  window._skyAC=[];
+  if(CFG.skyPlanes){
+    let acBusy=false;
+    const acPoll=function(){
+      if(acBusy) return; acBusy=true;
+      fetch('https://api.adsb.lol/v2/point/'+CFG.userLat.toFixed(3)+'/'+CFG.userLon.toFixed(3)+'/40')
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          acBusy=false;
+          const list=(j&&(j.ac||j.aircraft))||[];
+          const out=[];
+          for(const a of list){
+            const la=a.lat, lo=a.lon; if(typeof la!=='number'||typeof lo!=='number') continue;
+            let alF=(typeof a.alt_baro==='number')?a.alt_baro:((typeof a.alt_geom==='number')?a.alt_geom:30000);
+            if(alF<500) continue;   /* parked / ground returns */
+            out.push({la:la, lo:lo, al:alF*0.3048/1000, gs:((a.gs||430)*0.514444), trk:((a.track||a.true_heading||0)*Math.PI/180), t:performance.now(), ph:Math.random()*6.28});
+            if(out.length>=14) break;
+          }
+          window._skyAC=out;
+        }).catch(function(){ acBusy=false; });
+    };
+    acPoll(); setInterval(acPoll, 25*1000);
+  }
+
+  const satSp=(function(){ const m=new THREE.SpriteMaterial({ map:glowTexture(), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, color:new THREE.Color(0.95,0.97,1), opacity:0 });
+    const sp=new THREE.Sprite(m); sp.renderOrder=3; sp.scale.set(0.20,0.20,1); scene.add(sp); return sp; })();
+
+  let lastT=performance.now(), flashUntil=0, nextFlash=0;
+  const _v1=new THREE.Vector3(), _v2=new THREE.Vector3();
+  window.__skyLiveTick=function(Zen, Nrth, East, gm){
+    const nowMs=performance.now();
+    let dt=(nowMs-lastT)/1000; lastT=nowMs; if(dt>0.25) dt=0.25;
+    const wx=window._skyWx||{rain:0,snow:0,thunder:0};
+    const hs=earthUniforms.sunDir.value.dot(Zen);
+    const camP=camera.position;
+
+    /* precipitation */
+    const upd=function(P, fall, slant, wob, op){
+      P.pts.material.opacity=op;
+      if(op<=0.01) return;
+      const arr=P.pts.geometry.attributes.position.array;
+      for(let i=0;i<P.n;i++){ const o=P.off[i];
+        o.z-=fall*dt; o.x+=slant*dt;
+        if(wob) o.x+=Math.sin(nowMs*0.0012+o.ph)*0.12*dt;
+        if(o.z<0.05){ o.z=2.2+Math.random()*0.5; o.x=Math.random()*3.2-1.6; o.y=Math.random()*3.2-1.6; }
+        if(o.x>1.8) o.x-=3.4;
+        const ix=i*3;
+        arr[ix]  =camP.x+East.x*o.x+Nrth.x*o.y+Zen.x*o.z;
+        arr[ix+1]=camP.y+East.y*o.x+Nrth.y*o.y+Zen.y*o.z;
+        arr[ix+2]=camP.z+East.z*o.x+Nrth.z*o.y+Zen.z*o.z;
+      }
+      P.pts.geometry.attributes.position.needsUpdate=true;
+    };
+    upd(rainP, 3.4, 0.35, false, wx.rain*0.8);
+    upd(snowP, 0.38, 0.05, true,  wx.snow*0.95);
+
+    /* thunderstorm: whole-sky flashes lighting the cloud deck from within */
+    if(wx.thunder){
+      if(nowMs>nextFlash){ nextFlash=nowMs+(1800+Math.random()*6500); flashUntil=nowMs+(140+Math.random()*180); }
+    }
+    let fl=0;
+    if(nowMs<flashUntil) fl=0.55+0.45*Math.random();
+    cloudUniforms.uFlash.value=fl;
+
+    /* the ISS, only when truly visible from this spot */
+    if(CFG.skySats && typeof issSp!=='undefined' && issSp && issData){
+      issSp.getWorldPosition(_v1);
+      _v2.copy(_v1).sub(camP).normalize();
+      const el=_v2.dot(Zen);
+      const vis=(el>0.08) && (hs<-0.03) && (!issData.ecl);
+      if(vis){ satSp.position.copy(camP).addScaledVector(_v2, 25); satSp.material.opacity=0.9; }
+      else satSp.material.opacity=0;
+    } else satSp.material.opacity=0;
+
+    /* live aircraft as moving lights */
+    const acs=(CFG.skyPlanes && window._skyAC)||[];
+    for(let i=0;i<acPool.length;i++){
+      const sp=acPool[i];
+      if(i>=acs.length){ sp.material.opacity=0; continue; }
+      const a=acs[i];
+      const age=(nowMs-a.t)/1000;
+      const dKm=a.gs*age/1000;
+      const dLat=(dKm*Math.cos(a.trk))/111.32;
+      const dLon=(dKm*Math.sin(a.trk))/(111.32*Math.max(0.2,Math.cos(a.la*Math.PI/180)));
+      const w=locationDir(a.la+dLat, a.lo+dLon, gm);
+      _v1.set(w[0],w[1],w[2]).multiplyScalar(1+a.al/6371);
+      _v2.copy(_v1).sub(camP).normalize();
+      const el=_v2.dot(Zen);
+      if(el<=0.05){ sp.material.opacity=0; continue; }
+      sp.position.copy(camP).addScaledVector(_v2, 25);
+      const scl=0.07+0.13*el;
+      sp.scale.set(scl,scl,1);
+      const night=hs<0.0;
+      if(night){ const bl=((nowMs*0.001+a.ph)%1.1)<0.12; sp.material.opacity=bl?1.0:0.5; sp.material.color.setRGB(1,0.98,0.95); }
+      else { sp.material.opacity=0.45; sp.material.color.setRGB(0.92,0.94,0.98); }
+    }
+  };
 }catch(e){} }
 
 /* ---- LIGHTNING: flashes spawned inside the REAL live storm clouds, night side ---- */
@@ -2348,6 +2485,8 @@ function update(){
     }
     if(window._skyAtmoHid!==1){ try{ scene.traverse(function(o){ if(o.isMesh&&o.material&&o.material.side===THREE.BackSide&&o.material.blending===THREE.AdditiveBlending&&o.geometry&&o.geometry.parameters&&o.geometry.parameters.radius<2){ o.visible=false; } }); window._skyAtmoHid=1; }catch(e){} }
     if(window._skySunRO!==1 && typeof sunCore!=='undefined' && sunCore){ try{ sunCore.traverse(function(o){ o.renderOrder=2; }); window._skySunRO=1; }catch(e){} }
+    if(typeof issSp!=='undefined' && issSp) issSp.visible=false;
+    if(window.__skyLiveTick){ try{ window.__skyLiveTick(Zen, Nrth, East, gm); }catch(e){} }
   } else if(CFG.mode === 'closeup'){
     /* Locked low-orbit oblique: camera sits ~600 km above the user's location
        (which co-rotates with the spin -> globe still, Sun sweeps). It looks
