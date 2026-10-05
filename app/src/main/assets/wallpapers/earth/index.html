@@ -405,7 +405,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r114';
+window._TERRA_REV = 'r115';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -2340,7 +2340,7 @@ function update(){
     camera.lookAt(_cuTgt.x, _cuTgt.y, _cuTgt.z);
     const sunUpK = (earthUniforms.sunDir.value.dot(Zen) > 0.06) ? 1 : 0;
     window._skyDayTick=(window._skyDayTick||0)+1;
-    if(window._skyDayHid !== sunUpK || (window._skyDayTick % 120) === 0){
+    if(window._skyDayHid !== sunUpK || (window._skyDayTick % 30) === 0){
       try{ scene.traverse(function(o){
         if(o.isPoints){ o.visible = !sunUpK; }
         else if(o.isSprite && o.renderOrder !== 2 && o.position && o.position.length() > 1500){ o.visible = !sunUpK; }
