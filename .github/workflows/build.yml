@@ -73,13 +73,11 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
 
       - name: Publish test release (public download link for your phone)
+        if: always()
         continue-on-error: true
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0-test
-          name: "Terra Live 1.0 test build"
-          body: "Debug APK for testing. Download app-debug.apk on your phone and install it."
-          files: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release.apk
-            app/build/outputs/bundle/release/app-release.aab
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VC=$(grep -oP 'versionCode = \K\d+' app/build.gradle.kts)
+          gh release upload v1.0-test app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk app/build/outputs/bundle/release/app-release.aab --clobber -R ${{ github.repository }}
+          gh release edit v1.0-test --title "Terra test build vc$VC" --notes "Newest build, replaced automatically on every push. Install app-release.apk on your phone. Current: vc$VC." -R ${{ github.repository }}
