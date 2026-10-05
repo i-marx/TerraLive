@@ -35,7 +35,15 @@ jobs:
         run: echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/terra-upload.jks"
 
       - name: Build debug APK (sideload on your phone)
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug 2>&1 | tee build_log.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build_log.txt
 
       - name: Build release bundle + APK (signed for Google Play)
         env:
