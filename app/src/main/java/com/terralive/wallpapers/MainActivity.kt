@@ -324,5 +324,13 @@ class MainActivity : AppCompatActivity() {
             "The planet turns gently on its axis (full view)") {
             p.edit().putBoolean(Wallpapers.KEY_ROT, !rotOn).apply(); refreshSheet()
         })
+        /* version footer: always visible at the bottom of the menu */
+        val ver = TextView(this)
+        ver.text = try { "Terra " + packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "Terra" }
+        ver.textSize = 12f
+        ver.setTextColor(0x66FFFFFF.toInt())
+        ver.gravity = android.view.Gravity.CENTER
+        ver.setPadding(0, dp(12f), 0, dp(4f))
+        body.addView(ver)
     }
 }
