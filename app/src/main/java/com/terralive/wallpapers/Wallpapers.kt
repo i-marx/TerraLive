@@ -30,6 +30,11 @@ object Wallpapers {
             "earth",
             "The Planet",
             "Earth from orbit in real time — live clouds, true night sky, real Moon"
+        ),
+        WallpaperInfo(
+            "sky",
+            "Sky View",
+            "The sky above you, live: real clouds, rain and snow, planes, the ISS, a night with zero light pollution"
         )
         /* hidden until refined — flip this back on in an update:
         ,WallpaperInfo(
@@ -44,11 +49,23 @@ object Wallpapers {
 
     /* Asset URL with view-mode + location query params (earth only). */
     fun urlFor(ctx: Context, id: String): String {
+        if (id == "sky") {
+            val pS = prefs(ctx)
+            val motS = if (pS.getBoolean(KEY_MOTION, true)) 1 else 0
+            val latS = pS.getFloat(KEY_LAT, Float.NaN)
+            val lonS = pS.getFloat(KEY_LON, Float.NaN)
+            val qsS = StringBuilder("?look=3&motion=").append(motS).append("&mode=sky")
+            if (!latS.isNaN() && !lonS.isNaN()) qsS.append("&lat=").append(latS).append("&lon=").append(lonS)
+            qsS.append("&sats=").append(if (pS.getBoolean(KEY_SKY_SATS, true)) 1 else 0)
+            qsS.append("&planes=").append(if (pS.getBoolean(KEY_SKY_PLANES, true)) 1 else 0)
+            return assetUrl("earth") + qsS.toString()
+        }
         val base = assetUrl(id)
         if (id != "earth") return base
         val p = prefs(ctx)
         val mode0 = p.getString(KEY_MODE, "full") ?: "full"
-        val mode = if (mode0 == "locked") "closeup" else mode0
+        val mode1 = if (mode0 == "locked") "closeup" else mode0
+        val mode = if (mode1 == "sky") "full" else mode1   /* sky lives as its own wallpaper now */
         val look = p.getInt(KEY_LOOK, 3)
         val mot = if (p.getBoolean(KEY_MOTION, true)) 1 else 0
         val rt = if (p.getBoolean(KEY_ROT, false)) 1 else 0
@@ -57,11 +74,6 @@ object Wallpapers {
         val qs = StringBuilder("?look=").append(look).append("&motion=").append(mot).append("&rot=").append(rt)
         if (mode != "full" && !lat.isNaN() && !lon.isNaN())
             qs.append("&mode=").append(mode).append("&lat=").append(lat).append("&lon=").append(lon)
-        if (mode == "sky") {
-            val p2 = prefs(ctx)
-            qs.append("&sats=").append(if (p2.getBoolean(KEY_SKY_SATS, true)) 1 else 0)
-            qs.append("&planes=").append(if (p2.getBoolean(KEY_SKY_PLANES, true)) 1 else 0)
-        }
         return base + qs.toString()
     }
 
@@ -75,6 +87,10 @@ object Wallpapers {
         val e = prefs(ctx).edit().putString(KEY_MODE, mode)
         if (lat != null && lon != null) { e.putFloat(KEY_LAT, lat.toFloat()); e.putFloat(KEY_LON, lon.toFloat()) }
         e.apply()
+    }
+
+    fun setLocation(ctx: Context, lat: Double, lon: Double) {
+        prefs(ctx).edit().putFloat(KEY_LAT, lat.toFloat()).putFloat(KEY_LON, lon.toFloat()).apply()
     }
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
