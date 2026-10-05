@@ -407,7 +407,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r118';
+window._TERRA_REV = 'r121';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1188,7 +1188,7 @@ const cloudMat = new THREE.ShaderMaterial({
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
     uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb; uniform float uSky; uniform float uFlash;
-    float h21c(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float h21c(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   /* sin-free: mobile GPUs mangle sin() at large args into square lattices */
     float vn2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
       return mix(mix(h21c(i),h21c(i+vec2(1.0,0.0)),f.x), mix(h21c(i+vec2(0.0,1.0)),h21c(i+vec2(1.0,1.0)),f.x), f.y); }
     varying vec3 vN; varying vec2 vUv;
