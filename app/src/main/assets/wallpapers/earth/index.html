@@ -405,7 +405,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r110';
+window._TERRA_REV = 'r111';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -2329,6 +2329,7 @@ function update(){
        celestial sphere is fixed in world space and the camera rides the
        rotating Earth, so stars, Moon and planets wheel overhead at the true
        sidereal rate for this latitude - no shortcuts, just the geometry. */
+    if(camera.fov !== 96){ camera.fov = 96; camera.near = 0.0008; camera.updateProjectionMatrix(); }
     const Zen = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gm));
     const Nrth = new THREE.Vector3(0,1,0).addScaledVector(Zen, -Zen.y).normalize();
     const East = new THREE.Vector3().crossVectors(Nrth, Zen).normalize();
