@@ -405,7 +405,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r112';
+window._TERRA_REV = 'r113';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1211,12 +1211,12 @@ const cloudMat = new THREE.ShaderMaterial({
         float hs2=dot(zen2, sunDir);
         float F2=smoothstep(-0.10, 0.12, hs2);
         float twS=1.0-smoothstep(0.0, 0.25, abs(hs2));
-        vec3 under=mix(vec3(0.96,0.97,1.0), vec3(0.44,0.48,0.56), aS);
+        vec3 under=mix(vec3(1.0,1.0,1.0), vec3(0.52,0.56,0.63), aS);
         vec3 cDay=mix(under, vec3(1.0,0.52,0.26), twS*0.6);
         float ml2=max(dot(zen2, uMoonDir), 0.0)*uMoonAmt;
         vec3 cNight=vec3(0.030,0.036,0.052)+vec3(0.10,0.12,0.16)*ml2;
         vec3 cS=mix(cNight, cDay, F2);
-        gl_FragColor=vec4(cS, aS*mix(0.92,0.97,F2));
+        gl_FragColor=vec4(cS, clamp(aS*mix(0.92,1.25,F2),0.0,1.0));
         return;
       }
       /* fade clouds out toward the poles to kill the equirectangular
@@ -2338,6 +2338,13 @@ function update(){
     _cuTgt.copy(Zen).multiplyScalar(4);
     if(CFG.motion){ _cuTgt.addScaledVector(East, _pjx*0.38*_pFade).addScaledVector(Nrth, _pjy*0.38*_pFade); }
     camera.lookAt(_cuTgt.x, _cuTgt.y, _cuTgt.z);
+    const sunUpK = (earthUniforms.sunDir.value.dot(Zen) > 0.06) ? 1 : 0;
+    if(window._skyDayHid !== sunUpK){
+      try{ scene.traverse(function(o){
+        if(o.isPoints){ o.visible = !sunUpK; }
+        else if(o.isSprite && o.renderOrder !== 2 && o.position && o.position.length() > 1500){ o.visible = !sunUpK; }
+      }); window._skyDayHid = sunUpK; }catch(e){}
+    }
     if(window._skyAtmoHid!==1){ try{ scene.traverse(function(o){ if(o.isMesh&&o.material&&o.material.side===THREE.BackSide&&o.material.blending===THREE.AdditiveBlending&&o.geometry&&o.geometry.parameters&&o.geometry.parameters.radius<2){ o.visible=false; } }); window._skyAtmoHid=1; }catch(e){} }
     if(window._skySunRO!==1 && typeof sunCore!=='undefined' && sunCore){ try{ sunCore.traverse(function(o){ o.renderOrder=2; }); window._skySunRO=1; }catch(e){} }
   } else if(CFG.mode === 'closeup'){
