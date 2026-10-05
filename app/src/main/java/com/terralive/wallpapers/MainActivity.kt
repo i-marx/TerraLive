@@ -301,17 +301,32 @@ class MainActivity : AppCompatActivity() {
             letterSpacing = 0.30f
             light(this)
         })
-        sectionLabel(body, "VIEW")
         val currentMode0 = Wallpapers.viewMode(this)
         val currentMode = if (currentMode0 == "locked") "closeup" else currentMode0
-        val modes = listOf(
+        sectionLabel(body, "THE PLANET")
+        val planetModes = listOf(
             Triple("full", "Full view", "Earth from deep space, real day and night"),
-            Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain"),
-            Triple("sky", "Sky above me", "Looking up from your place: real clouds, pristine night sky")
+            Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain")
         )
-        for ((id, title, sub) in modes) {
+        for ((id, title, sub) in planetModes) {
             val on = id == currentMode
             body.addView(optionCard(on, title, sub) { selectMode(id) })
+        }
+        sectionLabel(body, "CLOUDS VIEW")
+        body.addView(optionCard(currentMode == "sky", "Clouds above me",
+            "Look straight up: live clouds, rain and snow, the night sky with zero light pollution") { selectMode("sky") })
+        if (currentMode == "sky") {
+            val pSky = Wallpapers.prefs(this)
+            val satsOn = pSky.getBoolean(Wallpapers.KEY_SKY_SATS, true)
+            body.addView(optionCard(satsOn, "Satellites",
+                "The real ISS crossing your sky, only when it is truly visible") {
+                pSky.edit().putBoolean(Wallpapers.KEY_SKY_SATS, !satsOn).apply(); refreshSheet()
+            })
+            val plnOn = pSky.getBoolean(Wallpapers.KEY_SKY_PLANES, true)
+            body.addView(optionCard(plnOn, "Aircraft overhead",
+                "Live planes above you right now, as moving lights") {
+                pSky.edit().putBoolean(Wallpapers.KEY_SKY_PLANES, !plnOn).apply(); refreshSheet()
+            })
         }
         sectionLabel(body, "EFFECTS")
         val p = Wallpapers.prefs(this)
