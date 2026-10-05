@@ -407,7 +407,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r121';
+window._TERRA_REV = 'r122';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1176,21 +1176,22 @@ scene.add(earth);
 
 /* ---------- clouds ---------- */
 const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value },
-  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 }, uSky:{ value: 0.0 }, uFlash:{ value: 0.0 } };
+  uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 }, uSky:{ value: 0.0 }, uFlash:{ value: 0.0 },
+  skyTex:{ value: null }, uWinC:{ value: new THREE.Vector2(0.5,0.5) }, uWinS:{ value: 1.0 } };
 const cloudMat = new THREE.ShaderMaterial({
   uniforms: cloudUniforms, transparent: true, depthWrite: false,
   vertexShader: `
-    varying vec3 vN; varying vec2 vUv;
+    varying vec3 vN; varying vec2 vUv; varying vec2 vSkyUv;
+    uniform vec2 uWinC; uniform float uWinS;
     void main(){
       vUv = uv; vN = normalize(mat3(modelMatrix) * normal);
+      vSkyUv = (uv - uWinC) * uWinS + 0.5;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
     }`,
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
     uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb; uniform float uSky; uniform float uFlash;
-    float h21c(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }   /* sin-free: mobile GPUs mangle sin() at large args into square lattices */
-    float vn2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
-      return mix(mix(h21c(i),h21c(i+vec2(1.0,0.0)),f.x), mix(h21c(i+vec2(0.0,1.0)),h21c(i+vec2(1.0,1.0)),f.x), f.y); }
+    uniform sampler2D skyTex; varying vec2 vSkyUv;
     varying vec3 vN; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
@@ -1207,8 +1208,11 @@ const cloudMat = new THREE.ShaderMaterial({
         /* ground view: synthesize fine texture inside the real satellite cover
            field (the same honest trick as the polar caps) and light the
            undersides by the sun's true elevation at this spot */
-        float dA=0.55*vn2(vUv*vec2(2800.0,1400.0))+0.30*vn2(vUv*vec2(6400.0,3200.0))+0.15*vn2(vUv*vec2(14000.0,7000.0));
-        float aS=clamp(a*(0.20+1.70*pow(dA,1.5)), 0.0, 1.0);
+        /* the local sky window is baked on the CPU (full precision, every
+           device identical): real satellite cover with organic fine detail */
+        float aS=texture2D(skyTex, vSkyUv).a;
+        float edge=smoothstep(0.0, 0.06, min(min(vSkyUv.x, 1.0-vSkyUv.x), min(vSkyUv.y, 1.0-vSkyUv.y)));
+        aS*=edge;
         vec3 zen2=normalize(cameraPosition);
         float hs2=dot(zen2, sunDir);
         float F2=smoothstep(-0.10, 0.12, hs2);
@@ -1709,7 +1713,61 @@ if(CFG.mode==='sky'){ try{
   }
 
   const satSp=(function(){ const m=new THREE.SpriteMaterial({ map:glowTexture(), transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, color:new THREE.Color(0.95,0.97,1), opacity:0 });
-    const sp=new THREE.Sprite(m); sp.renderOrder=3; sp.scale.set(0.20,0.20,1); scene.add(sp); return sp; })();
+    const sp=new THREE.Sprite(m); sp.renderOrder=3; sp.scale.set(0.09,0.09,1); scene.add(sp); return sp; })();
+
+  /* bake the local sky cloud window on the CPU: a 1024px canvas covering
+     +-6 degrees around the user, real cover from the satellite map with the
+     same organic breakup the polar caps use. No GPU noise: every phone
+     renders it identically. */
+  const bakeSky=function(){
+    try{
+      const src=window._cloudCvRef; if(!src || src.width<2048) return;
+      const W=src.width, H=src.height;
+      const EXT=6.0;
+      const uc=((CFG.userLon+180)/360%1+1)%1, vc=(90-CFG.userLat)/180;
+      const px=Math.round(uc*W), py=Math.round(vc*H);
+      const hw=Math.round(EXT/360*W), hh=Math.round(EXT/180*H);
+      const win=document.createElement('canvas'); win.width=hw*2; win.height=hh*2;
+      const wx=win.getContext('2d');
+      /* wrap-safe copy */
+      for(const off of [-W,0,W]){
+        wx.drawImage(src, px-hw+off, py-hh, hw*2, hh*2, 0, 0, hw*2, hh*2);
+      }
+      const S=1024;
+      const up=document.createElement('canvas'); up.width=S; up.height=S;
+      const ux=up.getContext('2d'); ux.imageSmoothingEnabled=true;
+      ux.drawImage(win, 0, 0, S, S);
+      const id=ux.getImageData(0,0,S,S), d=id.data;
+      const mk2=function(L){ const pts=new Float32Array(L*L); for(let q=0;q<L*L;q++) pts[q]=Math.random();
+        return function(x,y){ const fx=Math.max(0,Math.min(L-1.001,x*L)), fy=Math.max(0,Math.min(L-1.001,y*L));
+          const x0=Math.floor(fx), y0=Math.floor(fy), x1=Math.min(L-1,x0+1), y1=Math.min(L-1,y0+1);
+          const tx=fx-x0, ty=fy-y0, u2=tx*tx*(3-2*tx), v2=ty*ty*(3-2*ty);
+          const a2=pts[y0*L+x0]*(1-u2)+pts[y0*L+x1]*u2, b2=pts[y1*L+x0]*(1-u2)+pts[y1*L+x1]*u2;
+          return a2*(1-v2)+b2*v2; }; };
+      const n1=mk2(11), n2=mk2(31), n3=mk2(83), w1=mk2(7), w2=mk2(9);
+      for(let y=0;y<S;y++){ const fy=y/S;
+        for(let x=0;x<S;x++){ const fx=x/S;
+          const wxp=fx+(w1(fx,fy)-0.5)*0.22, wyp=fy+(w2(fx,fy)-0.5)*0.22;
+          const nn=0.5*n1(wxp,wyp)+0.3*n2(wxp,wyp)+0.2*n3(wxp,wyp);
+          const i4=(y*S+x)*4;
+          const base=Math.pow(d[i4+3]/255, 0.9);
+          const aa=Math.max(0, Math.min(1, base*(0.25+1.6*Math.pow(nn,1.5))));
+          d[i4]=255; d[i4+1]=255; d[i4+2]=255; d[i4+3]=Math.round(aa*255);
+        } }
+      ux.putImageData(id,0,0);
+      const tex=new THREE.CanvasTexture(up);
+      tex.minFilter=THREE.LinearMipmapLinearFilter; tex.magFilter=THREE.LinearFilter;
+      tex.generateMipmaps=true; tex.needsUpdate=true;
+      try{ tex.anisotropy=renderer.capabilities.getMaxAnisotropy(); }catch(e){}
+      if(cloudUniforms.skyTex.value && cloudUniforms.skyTex.value.dispose) cloudUniforms.skyTex.value.dispose();
+      cloudUniforms.skyTex.value=tex;
+      cloudUniforms.uWinC.value.set(uc, vc);
+      cloudUniforms.uWinS.value=360/(EXT*2);
+      window._skyBaked=(window._skyBaked||0)+1;
+    }catch(e){}
+  };
+  setTimeout(bakeSky, 8000);
+  setInterval(bakeSky, 10*60*1000);
 
   let lastT=performance.now(), flashUntil=0, nextFlash=0;
   const _v1=new THREE.Vector3(), _v2=new THREE.Vector3();
@@ -1774,11 +1832,11 @@ if(CFG.mode==='sky'){ try{
       const el=_v2.dot(Zen);
       if(el<=0.05){ sp.material.opacity=0; continue; }
       sp.position.copy(camP).addScaledVector(_v2, 25);
-      const scl=0.07+0.13*el;
+      const scl=0.028+0.05*el;   /* a real jet at altitude is a point of light, not a blob */
       sp.scale.set(scl,scl,1);
       const night=hs<0.0;
       if(night){ const bl=((nowMs*0.001+a.ph)%1.1)<0.12; sp.material.opacity=bl?1.0:0.5; sp.material.color.setRGB(1,0.98,0.95); }
-      else { sp.material.opacity=0.45; sp.material.color.setRGB(0.92,0.94,0.98); }
+      else { sp.material.opacity=0.32; sp.material.color.setRGB(0.92,0.94,0.98); }
     }
   };
 }catch(e){} }
