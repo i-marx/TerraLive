@@ -404,7 +404,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r107';
+window._TERRA_REV = 'r109';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -1480,7 +1480,7 @@ function paintAurora(coords){
   const img=gx.createImageData(GW,GH);
   const put=(lon,lat,p)=>{
     /* p = probability 0..100; kill the noise floor, keep real aurora */
-    const v=Math.round(255*Math.pow(Math.min(1, Math.max(0,(p-14)/52)), 0.9));
+    const v=Math.round(255*Math.pow(Math.min(1, Math.max(0,(p-8)/58)), 1.45));
     if(v<=0) return;
     let x=Math.round(lon+CFG.lonOffset+180); x=((x%GW)+GW)%GW;
     let y=Math.round(90-lat); if(y<0)y=0; if(y>GH-1)y=GH-1;
@@ -1565,11 +1565,11 @@ try{
       void main(){
         vec3 am=texture2D(aurMap,vUv).rgb;
         float a=am.g;
-        if(a<0.03){ gl_FragColor=vec4(0.0); return; }
+        if(a<0.012){ gl_FragColor=vec4(0.0); return; }
         float rr=clamp(am.r/max(am.g,0.01),0.0,0.9);
-        a=smoothstep(0.03, 0.9, a);
+        a=smoothstep(0.012, 0.85, a);
         vec3 n=normalize(vN); vec3 vd=normalize(cameraPosition-vWP);
-        float night=smoothstep(0.00,-0.14,dot(n,sunDir)); night*=night;
+        float night=smoothstep(0.06,-0.22,dot(n,sunDir)); night=pow(night,1.5);
         float limb=pow(1.0-max(dot(n,vd),0.0),1.4);
         vec3 col=vec3(0.12,1.0,0.45)*a + vec3(0.50,0.15,0.80)*a*a*0.65;
         col=mix(col, vec3(1.0,0.22,0.28)*(0.55+0.45*a), rr*0.62);
@@ -1622,7 +1622,7 @@ try{
     const m=new THREE.SpriteMaterial({ map:gt, transparent:true, depthWrite:false,
       blending:THREE.AdditiveBlending, color:new THREE.Color(0.80,0.88,1.0), opacity:0 });
     const sp=new THREE.Sprite(m); sp.scale.set(0.02,0.02,1); earth.add(sp);
-    flashes.push({sp, life:0, dur:0.25, amp:1});
+    flashes.push({sp, life:0, dur:0.3, amp:1});
   }
 }catch(e){}
 let _stormLast=null, _stormLastT=0;
@@ -1922,8 +1922,8 @@ function updateExtras(gm, sd, mdU, illum){
     if(sunSpikesSp) sunSpikesSp.position.copy(sunCore.position);
   }
   /* lightning */
-  const flashRate = CFG.demo ? 0.22 : 1.1;
-  if(stormCells && Math.random() < dt/flashRate){ spawnFlash(gm, sd); if(Math.random()<0.30) spawnFlash(gm, sd); }
+  const flashRate = CFG.demo ? 0.16 : 0.6;
+  if(stormCells && Math.random() < dt/flashRate){ spawnFlash(gm, sd); if(Math.random()<0.45) spawnFlash(gm, sd); if(Math.random()<0.15) spawnFlash(gm, sd); }
   for(const fl of flashes){
     if(fl.life>0){ fl.life-=dt; const e=Math.max(0, fl.life/fl.dur);
       fl.sp.material.opacity=fl.amp*Math.pow(e,1.5); }
