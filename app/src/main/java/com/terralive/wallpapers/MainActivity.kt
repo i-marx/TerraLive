@@ -306,7 +306,8 @@ class MainActivity : AppCompatActivity() {
         val currentMode = if (currentMode0 == "locked") "closeup" else currentMode0
         val modes = listOf(
             Triple("full", "Full view", "Earth from deep space, real day and night"),
-            Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain")
+            Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain"),
+            Triple("sky", "Sky above me", "Looking up from your place: real clouds, pristine night sky")
         )
         for ((id, title, sub) in modes) {
             val on = id == currentMode
