@@ -79,6 +79,7 @@ class EarthWallpaperService : WallpaperService() {
             wv.setBackgroundColor(Color.BLACK)
             wv.settings.apply {
                 javaScriptEnabled = true
+            allowUniversalAccessFromFileURLs = true   /* our own asset page talks to open data APIs without CORS headers (ADS-B) */
                 domStorageEnabled = true
                 allowFileAccess = true
                 mediaPlaybackRequiresUserGesture = false
