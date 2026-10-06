@@ -14,8 +14,8 @@ android {
         applicationId = "com.terralive.wallpapers"
         minSdk = 26
         targetSdk = 36
-        versionCode = 125
-        versionName = "1.0.125"
+        versionCode = 126
+        versionName = "1.0.126"
         buildConfigField("String", "BUILD_DATE", "\"" + SimpleDateFormat("M/d/yyyy").format(Date()) + "\"")
     }
     buildFeatures {
