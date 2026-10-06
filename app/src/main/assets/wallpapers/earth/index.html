@@ -71,6 +71,7 @@ const CFG = {
     else if(q.get('lock') === '1') CFG.mode = 'locked';
     const la = parseFloat(q.get('lat')), lo = parseFloat(q.get('lon'));
     if(isFinite(la) && isFinite(lo)){ CFG.userLat = la; CFG.userLon = lo; }
+    else if(CFG.mode === 'sky'){ CFG.userLat = 0; CFG.userLon = 0; }   /* sky stays sky; app will set location */
     else if(CFG.mode !== 'full') CFG.mode = 'full';
     if(q.has('lonOffset')) CFG.lonOffset = parseFloat(q.get('lonOffset')) || 0;
     /* optional close-up camera overrides (marketing / PC use) */
@@ -407,7 +408,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r124';
+window._TERRA_REV = 'r125';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -433,6 +434,51 @@ function liveCloudURLs(){  // cache-bust once per update window so new satellite
 function idbOpen(){ return new Promise(function(res){ try{ const r=indexedDB.open('terra',1); r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); }; r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }
 function idbGet(k){ return idbOpen().then(function(db){ if(!db) return null; return new Promise(function(res){ try{ const t=db.transaction('kv').objectStore('kv').get(k); t.onsuccess=function(){ res(t.result||null); }; t.onerror=function(){ res(null); }; }catch(e){ res(null); } }); }); }
 function idbPut(k, v){ idbOpen().then(function(db){ if(!db) return; try{ db.transaction('kv','readwrite').objectStore('kv').put(v, k); }catch(e){} }); }
+/* OFFLINE WARM START: the last good day/night/cloud imagery is cached on the
+   device; at boot it is applied instantly so the wallpaper is never a blank
+   ball with no internet. Fresh network data replaces it when it arrives. */
+function __mkCachedTex(im){
+  const t=new THREE.CanvasTexture(im);
+  try{ t.encoding = THREE.sRGBEncoding; }catch(e){}
+  t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+  t.generateMipmaps=true; t.needsUpdate=true;
+  try{ t.anisotropy=renderer.capabilities.getMaxAnisotropy(); }catch(e){}
+  return t;
+}
+function __warmStart(){
+  try{
+    idbGet('dayCache').then(function(b){ if(!b) return;
+      const u=URL.createObjectURL(b); const im=new Image();
+      im.onload=function(){ try{
+        if(earthUniforms.dayMap.value && earthUniforms.dayMap.value.image && earthUniforms.dayMap.value.image.width>4) return;
+        earthUniforms.dayMap.value=__mkCachedTex(im);
+      }catch(e){} };
+      im.src=u; }).catch(function(){});
+    idbGet('nightCache').then(function(b){ if(!b) return;
+      const u=URL.createObjectURL(b); const im=new Image();
+      im.onload=function(){ try{
+        if(earthUniforms.uHasNight.value>0) return;
+        earthUniforms.nightMap.value=__mkCachedTex(im); earthUniforms.uHasNight.value=1.0;
+      }catch(e){} };
+      im.src=u; }).catch(function(){});
+    idbGet('clouds').then(function(b){ if(!b) return;
+      const u=URL.createObjectURL(b); const im=new Image();
+      im.onload=function(){ try{
+        if(cloudUniforms.map.value) return;
+        const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height;
+        cv.getContext('2d').drawImage(im,0,0);
+        const t=texFromCloudCanvas(cv);
+        cloudUniforms.map.value=t; earthUniforms.cloudMap.value=t; earthUniforms.uHasClouds.value=1.0;
+        liveClouds=true;
+      }catch(e){} };
+      im.src=u; }).catch(function(){});
+  }catch(e){}
+}
+setTimeout(__warmStart, 300);
+window.addEventListener('online', function(){
+  try{ refreshClouds(); }catch(e){}
+  try{ if(!(earthUniforms.dayMap.value && earthUniforms.dayMap.value.image && earthUniforms.dayMap.value.image.width>4)) location.reload(); }catch(e){}
+});
 function __despeckleTL(cv, rowsTop, minBlurLum){ try{
   const W=cv.width, cx2=cv.getContext('2d');
   const bl=document.createElement('canvas'); bl.width=512; bl.height=Math.max(2,Math.round(rowsTop/8));
@@ -944,7 +990,19 @@ function loadCloudsLive(){
 function loadClouds(){
   return loadCloudsLive().then(t=>{
     if(t){ liveClouds = true; return t; }
-    return loadTex(URLS.clouds);   // offline / blocked: fall back to a static NASA layer
+    return loadTex(URLS.clouds).then(function(st){
+      if(st) return st;
+      /* fully offline: resurrect the last good satellite clouds from the device cache */
+      return new Promise(function(res){
+        idbGet('clouds').then(function(b){
+          if(!b){ res(null); return; }
+          const u=URL.createObjectURL(b); const im=new Image();
+          im.onload=function(){ try{ const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height; cv.getContext('2d').drawImage(im,0,0); liveClouds=true; res(texFromCloudCanvas(cv)); }catch(e){ res(null); } };
+          im.onerror=function(){ res(null); };
+          im.src=u;
+        }).catch(function(){ res(null); });
+      });
+    });
   });
 }
 
@@ -1177,7 +1235,7 @@ scene.add(earth);
 /* ---------- clouds ---------- */
 const cloudUniforms = { map:{ value:null }, sunDir:{ value: earthUniforms.sunDir.value },
   uMoonDir: earthUniforms.uMoonDir, uMoonAmt: earthUniforms.uMoonAmt, uEmb:{ value: 1.0 }, uSky:{ value: 0.0 }, uFlash:{ value: 0.0 },
-  skyTex:{ value: null }, uWinC:{ value: new THREE.Vector2(0.5,0.5) }, uWinS:{ value: 1.0 } };
+  skyTex:{ value: null }, uWinC:{ value: new THREE.Vector2(0.5,0.5) }, uWinS:{ value: 1.0 }, uSkyReady:{ value: 0.0 } };
 const cloudMat = new THREE.ShaderMaterial({
   uniforms: cloudUniforms, transparent: true, depthWrite: false,
   vertexShader: `
@@ -1191,7 +1249,7 @@ const cloudMat = new THREE.ShaderMaterial({
   fragmentShader: `
     uniform sampler2D map; uniform vec3 sunDir;
     uniform vec3 uMoonDir; uniform float uMoonAmt; uniform float uEmb; uniform float uSky; uniform float uFlash;
-    uniform sampler2D skyTex; varying vec2 vSkyUv;
+    uniform sampler2D skyTex; uniform float uSkyReady; varying vec2 vSkyUv;
     varying vec3 vN; varying vec2 vUv;
     vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14), 0.0, 1.0); }
     void main(){
@@ -1210,9 +1268,14 @@ const cloudMat = new THREE.ShaderMaterial({
            undersides by the sun's true elevation at this spot */
         /* the local sky window is baked on the CPU (full precision, every
            device identical): real satellite cover with organic fine detail */
-        float aS=texture2D(skyTex, vSkyUv).a;
-        float edge=smoothstep(0.0, 0.06, min(min(vSkyUv.x, 1.0-vSkyUv.x), min(vSkyUv.y, 1.0-vSkyUv.y)));
-        aS*=edge;
+        float aS;
+        if(uSkyReady > 0.5){
+          aS=texture2D(skyTex, vSkyUv).a;
+          float edge=smoothstep(0.0, 0.06, min(min(vSkyUv.x, 1.0-vSkyUv.x), min(vSkyUv.y, 1.0-vSkyUv.y)));
+          aS*=edge;
+        } else {
+          aS=a;   /* bake not landed yet: show the real coarse satellite cover, never a false clear sky */
+        }
         vec3 zen2=normalize(cameraPosition);
         float hs2=dot(zen2, sunDir);
         float F2=smoothstep(-0.10, 0.12, hs2);
@@ -1404,7 +1467,7 @@ function makeStarPoints(list){ // list of {ra(deg), dec, mag, bv}
 /* bright stars: fallback first, replaced by the real catalog when it loads */
 let brightStars = makeStarPoints(FALLBACK_STARS.map(s=>({ ra:s[0]*15, dec:s[1], mag:s[2], bv:s[3] })));
 scene.add(brightStars);
-fetch(CFG.starCatalog).then(r=>r.json()).then(d=>{
+const __applyCatalog=function(d){
   const list = [];
   for(const f of d.features){
     const mag = parseFloat(f.properties.mag);
@@ -1417,7 +1480,15 @@ fetch(CFG.starCatalog).then(r=>r.json()).then(d=>{
     brightStars = makeStarPoints(list);
     scene.add(brightStars);
   }
-}).catch(()=>{ /* offline: fallback list stays */ });
+};
+fetch(CFG.starCatalog).then(r=>r.text()).then(txt=>{
+  const d=JSON.parse(txt);
+  __applyCatalog(d);
+  try{ idbPut('stars6cache', txt); }catch(e){}
+}).catch(()=>{
+  /* offline: the full catalog from the device cache, else the bright fallback stays */
+  try{ idbGet('stars6cache').then(function(txt){ if(!txt) return; try{ __applyCatalog(JSON.parse(txt)); }catch(e){} }).catch(function(){}); }catch(e){}
+});
 
 /* ---------- planets (Mercury..Saturn) as glow sprites ---------- */
 function glowTexture(){
@@ -1712,7 +1783,7 @@ if(CFG.mode==='sky'){ try{
      renders it identically. */
   const bakeSky=function(){
     try{
-      const src=window._cloudCvRef; if(!src || src.width<2048) return;
+      const src=window._cloudCvRef; if(!src || src.width<512) return;
       const W=src.width, H=src.height;
       const EXT=6.0;
       const uc=((CFG.userLon+180)/360%1+1)%1, vc=(90-CFG.userLat)/180;
@@ -1754,10 +1825,12 @@ if(CFG.mode==='sky'){ try{
       cloudUniforms.skyTex.value=tex;
       cloudUniforms.uWinC.value.set(uc, 1-vc);   /* mesh v runs south->north, canvas rows north->south */
       cloudUniforms.uWinS.value=360/(EXT*2);
+      cloudUniforms.uSkyReady.value=1.0;
       window._skyBaked=(window._skyBaked||0)+1;
     }catch(e){}
   };
-  setTimeout(bakeSky, 8000);
+  const bakeLoop=function(){ bakeSky(); if(!cloudUniforms.uSkyReady.value) setTimeout(bakeLoop, 10*1000); };
+  setTimeout(bakeLoop, 4000);
   setInterval(bakeSky, 10*60*1000);
 
   let lastT=performance.now(), flashUntil=0, nextFlash=0;
@@ -2306,6 +2379,7 @@ function __applyDay(d){ try{
   _dc.getContext('2d').drawImage(d.image,0,0,_dc.width,_dc.height);
   __despeckleTL(_dc, Math.round((22/180)*_dc.height), 0.14);
   __polarConditionTL(_dc,true,78,84); __polarConditionTL(_dc,false,76,82.5);
+  try{ _dc.toBlob(function(b){ if(b) idbPut('dayCache', b); }, 'image/jpeg', 0.82); }catch(e){}
   const _dt=new THREE.CanvasTexture(_dc); _dt.encoding=d.encoding; _dt.anisotropy=d.anisotropy; _dt.wrapS=d.wrapS; _dt.wrapT=d.wrapT;
   earthUniforms.dayMap.value=_dt;
   (function(){ try{
@@ -2340,7 +2414,9 @@ function __applyDay(d){ try{
 Promise.all([loadTex(URLS.day), loadTex(URLS.night), loadTex(URLS.water),
              loadClouds(), loadTex(URLS.moon), loadTex(URLS.topo)]).then(([d,nt,w,c,m,tp])=>{
   if(d){ __applyDay(d); }
-  if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0; }
+  if(nt){ earthUniforms.nightMap.value = nt; earthUniforms.uHasNight.value = 1.0;
+    try{ const ni=nt.image; if(ni && ni.width>=2048){ const nc=document.createElement('canvas'); const nw=Math.min(4096, ni.width); nc.width=nw; nc.height=nw/2; nc.getContext('2d').drawImage(ni,0,0,nc.width,nc.height); nc.toBlob(function(b){ if(b) idbPut('nightCache', b); }, 'image/jpeg', 0.82); } }catch(e){}
+  }
   if(w){ earthUniforms.waterMap.value = w; earthUniforms.uHasWater.value = 1.0; }
   if(tp){ earthUniforms.topoMap.value = tp; earthUniforms.uHasTopo.value = 1.0; }
   if(c){
