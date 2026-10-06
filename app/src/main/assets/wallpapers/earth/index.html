@@ -408,7 +408,7 @@ const URLS = {
   /* full/locked keep everything at 8K: the disk centre resolves ~10px/deg */
 })();
 window.__PUB = (function(){ try{ return (/\.github\.io$/.test(location.hostname) && new URLSearchParams(location.search).get('full')!=='1') ? 1 : 0; }catch(e){ return 0; } })();
-window._TERRA_REV = 'r125';
+window._TERRA_REV = 'r126';
 try{ console.log('TERRA build', _TERRA_REV); }catch(e){}
 try{
   setTimeout(function(){
@@ -905,6 +905,7 @@ setTimeout(fetchPolarClouds, 2500);
 setTimeout(function(){ try{ if(!window._modelCloudCv) loadCloudsModel(true); }catch(e){} }, 1500);
 function loadCloudsLive(){
   const urls=liveCloudURLs().slice().sort(function(a, b){
+    if(CFG.mode==='sky'){ return ((a.indexOf('2048')>=0)?-1:1) - ((b.indexOf('2048')>=0)?-1:1); }   /* overhead window is tiny; small tier paints in seconds on mobile */
     return ((a.indexOf('4096')>=0)?-1:1) - ((b.indexOf('4096')>=0)?-1:1);
   });
   const donorP=idbGet('clouds').then(function(bl){
@@ -1283,10 +1284,10 @@ const cloudMat = new THREE.ShaderMaterial({
         vec3 under=mix(vec3(1.0,1.0,1.0), vec3(0.52,0.56,0.63), aS);
         vec3 cDay=mix(under, vec3(1.0,0.52,0.26), twS*0.6);
         float ml2=max(dot(zen2, uMoonDir), 0.0)*uMoonAmt;
-        vec3 cNight=vec3(0.052,0.060,0.082)+vec3(0.14,0.16,0.20)*ml2;
+        vec3 cNight=vec3(0.105,0.118,0.148)+vec3(0.20,0.22,0.26)*ml2;   /* airglow+starlight: night clouds read as slate masses, not black-on-black */
         vec3 cS=mix(cNight, cDay, F2);
         cS += vec3(0.90,0.95,1.05)*uFlash*(0.3+aS);
-        gl_FragColor=vec4(cS, clamp(aS*mix(0.92,1.25,F2),0.0,1.0));
+        gl_FragColor=vec4(cS, clamp(aS*mix(0.97,1.25,F2),0.0,1.0));
         return;
       }
       /* fade clouds out toward the poles to kill the equirectangular
