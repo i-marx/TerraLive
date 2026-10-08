@@ -1,12 +1,11 @@
 #!/bin/bash
-# Terra stream server bootstrap v4. Idempotent.
-# Immortal-pusher design: one ffmpeg holds the YouTube connection forever;
-# a feeder loops segments into a pipe. ffmpeg never exits, YouTube never
-# sees a disconnect, the broadcast never ends.
+# Terra stream server bootstrap v5. Idempotent.
+# Immortal pusher + duration-offset feeder: one continuous decoder-valid
+# timeline forever. No restamping, no resets, no disconnects.
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq ffmpeg curl >/dev/null
+apt-get install -y -qq ffmpeg curl gawk >/dev/null
 mkdir -p /opt/terra/bin /opt/terra/segments /etc/terra
 touch /etc/terra/stream.env
 cat > /opt/terra/bin/terra-pull.sh <<'EOF'
@@ -34,19 +33,23 @@ while [ ! -f live.mp4 ] && [ ! -f pending.mp4 ]; do sleep 10; done
 rm -f feed.ts
 mkfifo feed.ts
 (
+  OFF=0
   while :; do
     [ -f pending.mp4 ] && mv -f pending.mp4 live.mp4
-    ffmpeg -hide_banner -loglevel error -re -i live.mp4 -c copy -f mpegts - 2>>/opt/terra/feeder.log
+    D=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 live.mp4 2>/dev/null)
+    case "$D" in ''|N/A) D=300 ;; esac
+    ffmpeg -hide_banner -loglevel error -re -i live.mp4 -c copy -output_ts_offset "$OFF" -f mpegts - 2>>/opt/terra/feeder.log
+    OFF=$(awk "BEGIN{printf \"%.3f\", $OFF+$D}")
   done > feed.ts
 ) &
 FEED=$!
 trap 'kill $FEED 2>/dev/null' EXIT
-ffmpeg -hide_banner -loglevel warning -fflags +genpts -use_wallclock_as_timestamps 1 -i feed.ts -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}"
+ffmpeg -hide_banner -loglevel warning -fflags +genpts -i feed.ts -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}"
 EOF
 chmod 0755 /opt/terra/bin/terra-pull.sh /opt/terra/bin/terra-stream.sh
 cat > /etc/systemd/system/terra-stream.service <<'EOF'
 [Unit]
-Description=Terra Earth 24/7 YouTube stream (immortal pusher)
+Description=Terra Earth 24/7 YouTube stream (immortal pusher v5)
 After=network-online.target
 Wants=network-online.target
 [Service]
@@ -77,6 +80,6 @@ systemctl enable --now terra-pull.timer
 systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 echo
-echo 'TERRA SERVER READY (v4 immortal pusher).'
+echo 'TERRA SERVER READY (v5 continuous timeline).'
 echo "Segment present: $(ls /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet')"
 if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
