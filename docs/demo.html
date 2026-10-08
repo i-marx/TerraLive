@@ -16,7 +16,7 @@
 <body>
 <div id="veil"></div>
 <div id="err">WebGL is not available on this device.</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r129/three.min.js"></script>
 <script>
 'use strict';
 /* ============================================================
@@ -81,6 +81,7 @@ const CFG = {
     ovr('roll',     v=>CFG.cuRoll=v);
     ovr('alt',      v=>CFG.cuAltitudeKm=v);
     ovr('fov',      v=>CFG.cuFov=v);
+    ovr('glidespd', v=>CFG.glideSpd=v);   /* deg of longitude per second: ISS-style drift */
     CFG.look = 3;   /* Marx's pick: maximum polarizer */
     if(q.has('look')){ const lv=parseFloat(q.get('look')); if(isFinite(lv)) CFG.look = lv; }
     CFG.motion = 1;
@@ -367,7 +368,7 @@ const URLS = {
   day: ['https://www.solarsystemscope.com/textures/download/8k_earth_daymap.jpg',
         'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
         'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg',
-        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_atmos_2048.jpg'],
+        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r129/examples/textures/planets/earth_atmos_2048.jpg'],
   night: ['https://www.solarsystemscope.com/textures/download/8k_earth_nightmap.jpg',
           'https://unpkg.com/three-globe/example/img/earth-night.jpg',
           'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg'],
@@ -375,18 +376,18 @@ const URLS = {
           'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-water.png'],
   topo: ['https://unpkg.com/three-globe/example/img/earth-topology.png',
          'https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png'],
-  sky: ['https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/2294472375_24a3b8ef46_o.jpg'],
+  sky: ['https://cdn.jsdelivr.net/gh/mrdoob/three.js@r129/examples/textures/2294472375_24a3b8ef46_o.jpg'],
   /* REAL near-realtime cloud cover from EUMETSAT/NOAA satellites (clouds.matteason.co.uk) */
   cloudsLive: ['https://clouds.matteason.co.uk/images/8192x4096/clouds-alpha.png',
                'https://clouds.matteason.co.uk/images/4096x2048/clouds-alpha.png',
                'https://clouds.matteason.co.uk/images/2048x1024/clouds-alpha.png'],
   clouds: ['https://cdn.jsdelivr.net/gh/turban/webgl-earth@master/images/fair_clouds_4k.png',
-           'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_clouds_1024.png',
+           'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r129/examples/textures/planets/earth_clouds_1024.png',
            'https://unpkg.com/three-globe/example/img/clouds.png'],
   moon: ['moon.jpg',
          'https://i-marx.github.io/TerraLive/moon.jpg',
          'https://www.solarsystemscope.com/textures/download/2k_moon.jpg',
-         'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/moon_1024.jpg',
+         'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r129/examples/textures/planets/moon_1024.jpg',
          'https://unpkg.com/three-globe/example/img/moon.jpg']
 };
 /* ---- GPU texture budget: never load pixels a mode cannot display.
@@ -2599,7 +2600,9 @@ function update(){
        (which co-rotates with the spin -> globe still, Sun sweeps). It looks
        toward the horizon so the surface fills the frame with the limb + space
        in the upper-left. Framing verified against ISS reference imagery. */
-    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, CFG.userLon, gmR + _spin));
+    let __gLon = CFG.userLon;
+    if(CFG.glideSpd){ if(!window.__gT0) window.__gT0 = Date.now(); __gLon = CFG.userLon + CFG.glideSpd * (Date.now() - window.__gT0) / 1000; }
+    const Lp = new THREE.Vector3(...locationDir(CFG.userLat, __gLon, gmR + _spin));
     const E = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), Lp).normalize();
     const N = new THREE.Vector3().crossVectors(Lp, E);
     const az = CFG.cuAzimuth*D2R, ld = CFG.cuLookDown*D2R, roll = CFG.cuRoll*D2R;
