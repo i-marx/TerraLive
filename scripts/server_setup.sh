@@ -1,6 +1,6 @@
 #!/bin/bash
-# Terra stream server bootstrap. Idempotent: safe to run on a fresh box
-# or on one already configured by cloud-init. Seamless-loop edition.
+# Terra stream server bootstrap v3. Idempotent. Concat-loop edition:
+# continuous timestamps across loops so YouTube never drops the stream.
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -23,17 +23,18 @@ fi
 EOF
 cat > /opt/terra/bin/terra-stream.sh <<'EOF'
 #!/bin/bash
-# Loops the current segment into YouTube seamlessly (-stream_loop -1).
-# Only restarts ffmpeg when CI has delivered a fresh segment (4x/day),
-# so viewers get at most four sub-second seams per day.
+# Concat playlist repeats the same segment 2000x with continuously
+# increasing timestamps. Restart only when a fresh segment arrives.
 mkdir -p /opt/terra/segments
 cd /opt/terra/segments
 while :; do
   [ -f pending.mp4 ] && mv -f pending.mp4 live.mp4
   YT_KEY=""
   [ -f /etc/terra/stream.env ] && . /etc/terra/stream.env
-  if [ -f live.mp4 ] && [ -n "$YT_KEY" ]; then
-    ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -i live.mp4 -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}" &
+  if [ -f live.mp4 ] && [ -n "$YT_KEY" ] && [ "$YT_KEY" != "PASTE_KEY_HERE" ]; then
+    : > list.txt
+    for i in $(seq 1 2000); do echo "file '/opt/terra/segments/live.mp4'" >> list.txt; done
+    ffmpeg -hide_banner -loglevel warning -re -f concat -safe 0 -i list.txt -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}" &
     FPID=$!
     while kill -0 $FPID 2>/dev/null; do
       if [ -f pending.mp4 ]; then
@@ -46,7 +47,7 @@ while :; do
   else
     sleep 10
   fi
-  sleep 1
+  sleep 2
 done
 EOF
 chmod 0755 /opt/terra/bin/terra-pull.sh /opt/terra/bin/terra-stream.sh
@@ -83,7 +84,6 @@ systemctl enable --now terra-pull.timer
 systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 echo
-echo 'TERRA SERVER READY.'
-echo "Segment present: $(ls /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet, pulls every 30 min')"
+echo 'TERRA SERVER READY (v3 concat loop).'
+echo "Segment present: $(ls /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet')"
 if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
-echo "Next: echo 'YT_KEY=YOUR_KEY' > /etc/terra/stream.env && systemctl restart terra-stream"
