@@ -1,6 +1,6 @@
 #!/bin/bash
 # Terra stream server bootstrap. Idempotent: safe to run on a fresh box
-# or on one already configured by cloud-init.
+# or on one already configured by cloud-init. Seamless-loop edition.
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -23,6 +23,9 @@ fi
 EOF
 cat > /opt/terra/bin/terra-stream.sh <<'EOF'
 #!/bin/bash
+# Loops the current segment into YouTube seamlessly (-stream_loop -1).
+# Only restarts ffmpeg when CI has delivered a fresh segment (4x/day),
+# so viewers get at most four sub-second seams per day.
 mkdir -p /opt/terra/segments
 cd /opt/terra/segments
 while :; do
@@ -30,7 +33,16 @@ while :; do
   YT_KEY=""
   [ -f /etc/terra/stream.env ] && . /etc/terra/stream.env
   if [ -f live.mp4 ] && [ -n "$YT_KEY" ]; then
-    ffmpeg -hide_banner -loglevel warning -re -i live.mp4 -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}"
+    ffmpeg -hide_banner -loglevel warning -re -stream_loop -1 -i live.mp4 -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}" &
+    FPID=$!
+    while kill -0 $FPID 2>/dev/null; do
+      if [ -f pending.mp4 ]; then
+        kill $FPID 2>/dev/null
+        wait $FPID 2>/dev/null
+        break
+      fi
+      sleep 15
+    done
   else
     sleep 10
   fi
@@ -72,6 +84,6 @@ systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 echo
 echo 'TERRA SERVER READY.'
-echo 'Segment present:' $(ls -la /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet, pulls every 30 min')
-echo 'Stream key set:' $(grep -q YT_KEY= /etc/terra/stream.env && grep -c . /etc/terra/stream.env || echo NO)
-echo "Next: echo 'YT_KEY=YOUR_KEY' > /etc/terra/stream.env"
+echo "Segment present: $(ls /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet, pulls every 30 min')"
+if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
+echo "Next: echo 'YT_KEY=YOUR_KEY' > /etc/terra/stream.env && systemctl restart terra-stream"
