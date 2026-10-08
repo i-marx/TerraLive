@@ -1,38 +1,46 @@
 const puppeteer=require('puppeteer');
 const fs=require('fs');
 (async()=>{
-const SECONDS=parseInt(process.env.RENDER_SECONDS||'600',10);
-const browser=await puppeteer.launch({headless:'new',args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader','--use-angle=swiftshader','--window-size=1920,1080','--autoplay-policy=no-user-gesture-required']});
+const FRAMES=parseInt(process.env.FRAMES||'3600',10);
+const STEP_MS=1000/12;
+fs.mkdirSync('frames',{recursive:true});
+const browser=await puppeteer.launch({headless:'new',protocolTimeout:600000,args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader','--use-angle=swiftshader','--window-size=1600,900']});
 const page=await browser.newPage();
-await page.setViewport({width:1920,height:1080,deviceScaleFactor:1});
-const ws=fs.createWriteStream('cap.webm');
-await page.exposeFunction('nodeChunk',b64=>{ws.write(Buffer.from(b64,'base64'));});
-await page.goto('https://i-marx.github.io/TerraLive/demo.html?full=1&rot=1&intro=0&cb=ci'+Date.now(),{waitUntil:'networkidle2',timeout:180000});
-console.log('page loaded, warming textures 90s');
-await new Promise(r=>setTimeout(r,90000));
-const gl=await page.evaluate(()=>{const c=document.querySelector('canvas');const g=c.getContext('webgl')||c.getContext('webgl2');return {w:c.width,h:c.height,maxTex:g?g.getParameter(g.MAX_TEXTURE_SIZE):0};});
-console.log('canvas '+JSON.stringify(gl));
-await page.evaluate(()=>{
-  const c=document.querySelector('canvas');
-  const st=c.captureStream(30);
-  window.__mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:6000000});
-  window.__mr.ondataavailable=async e=>{
-    if(!e.data||!e.data.size)return;
-    const u8=new Uint8Array(await e.data.arrayBuffer());
-    let s='';
-    for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,Math.min(i+8192,u8.length)));
-    window.nodeChunk(btoa(s));
+await page.setViewport({width:1600,height:900,deviceScaleFactor:1});
+await page.evaluateOnNewDocument(()=>{
+  const T0=Date.now();
+  window.__vt=T0;
+  const RD=Date; const Rnow=Date.now.bind(Date); const Pnow=performance.now.bind(performance);
+  Date.now=()=>window.__vt;
+  const OrigDate=Date;
+  window.Date=new Proxy(OrigDate,{construct(t,a){ if(a.length===0) return new t(window.__vt); return new t(...a); }, get(t,p){ return p==='now'? (()=>window.__vt) : t[p]; }});
+  const p0=Pnow();
+  performance.now=()=>(window.__vt-T0)+p0;
+  window.__rafQ=[];
+  window.requestAnimationFrame=cb=>{window.__rafQ.push(cb);return window.__rafQ.length;};
+  window.cancelAnimationFrame=()=>{};
+  window.__step=(stepMs)=>{
+    window.__vt+=stepMs;
+    const q=window.__rafQ; window.__rafQ=[];
+    for(const cb of q){ try{ cb(performance.now()); }catch(e){} }
+    return window.__rafQ.length;
   };
-  window.__mr.start(2000);
+  window.__grab=(q)=>{ const c=document.querySelector('canvas'); return c? c.toDataURL('image/jpeg',q) : null; };
 });
-console.log('recording '+SECONDS+'s');
-await new Promise(r=>setTimeout(r,SECONDS*1000));
-await page.evaluate(()=>{try{window.__mr.stop()}catch(e){}});
-await new Promise(r=>setTimeout(r,5000));
-ws.end();
-await new Promise(r=>ws.on('close',r));
+await page.goto('https://i-marx.github.io/TerraLive/demo.html?full=1&rot=1&intro=0&rotspd=0.020944&cb=ci'+Math.floor(Math.random()*1e9),{waitUntil:'domcontentloaded',timeout:180000});
+console.log('page loaded, pumping warmup frames for texture load');
+for(let w=0;w<240;w++){ await page.evaluate(s=>window.__step(s),STEP_MS); await new Promise(r=>setTimeout(r,250)); if(w%40===0)console.log('warmup',w); }
+console.log('warmup done, rendering '+FRAMES+' frames');
+const t0=Date.now();
+for(let n=0;n<FRAMES;n++){
+  await page.evaluate(s=>window.__step(s),STEP_MS);
+  const d=await page.evaluate(q=>window.__grab(q),0.82);
+  if(!d) throw new Error('no canvas at frame '+n);
+  fs.writeFileSync('frames/f'+String(n).padStart(5,'0')+'.jpg',Buffer.from(d.slice(23),'base64'));
+  if(n%300===0){ const el=(Date.now()-t0)/1000; console.log('frame '+n+' elapsed '+el.toFixed(0)+'s rate '+(n/Math.max(el,1)).toFixed(2)+'fps'); }
+}
 await browser.close();
-const sz=fs.statSync('cap.webm').size;
-console.log('cap.webm bytes='+sz);
-if(sz<2000000){console.error('capture too small');process.exit(1);}
+const n=fs.readdirSync('frames').length;
+console.log('frames written: '+n);
+if(n<FRAMES) process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1);});
