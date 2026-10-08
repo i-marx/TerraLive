@@ -1,12 +1,12 @@
 const puppeteer=require('puppeteer');
 const fs=require('fs');
 (async()=>{
-const FRAMES=parseInt(process.env.FRAMES||'3600',10);
+const FRAMES=parseInt(process.env.FRAMES||'3000',10);
 const STEP_MS=1000/12;
 fs.mkdirSync('frames',{recursive:true});
-const browser=await puppeteer.launch({headless:'new',protocolTimeout:600000,args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader','--use-angle=swiftshader','--window-size=1600,900']});
+const browser=await puppeteer.launch({headless:'new',protocolTimeout:600000,args:['--no-sandbox','--disable-dev-shm-usage','--enable-unsafe-swiftshader','--use-angle=swiftshader','--window-size=1280,720']});
 const page=await browser.newPage();
-await page.setViewport({width:1600,height:900,deviceScaleFactor:1});
+await page.setViewport({width:1280,height:720,deviceScaleFactor:1});
 await page.evaluateOnNewDocument(()=>{
   const T0=Date.now();
   window.__vt=T0;
@@ -27,7 +27,7 @@ await page.evaluateOnNewDocument(()=>{
   };
   window.__grab=(q)=>{ const c=document.querySelector('canvas'); return c? c.toDataURL('image/jpeg',q) : null; };
 });
-await page.goto('https://i-marx.github.io/TerraLive/demo.html?full=1&rot=1&intro=0&rotspd=0.020944&cb=ci'+Math.floor(Math.random()*1e9),{waitUntil:'domcontentloaded',timeout:180000});
+await page.goto('https://i-marx.github.io/TerraLive/demo.html?full=1&rot=1&intro=0&rotspd=0.025133&cb=ci'+Math.floor(Math.random()*1e9),{waitUntil:'domcontentloaded',timeout:180000});
 console.log('page loaded, pumping warmup frames for texture load');
 for(let w=0;w<240;w++){ await page.evaluate(s=>window.__step(s),STEP_MS); await new Promise(r=>setTimeout(r,250)); if(w%40===0)console.log('warmup',w); }
 console.log('warmup done, rendering '+FRAMES+' frames');
