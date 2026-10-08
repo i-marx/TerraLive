@@ -1,5 +1,8 @@
 name: stream-render
 on:
+  push:
+    paths:
+      - "stream-trigger"
   workflow_dispatch:
     inputs:
       seconds:
