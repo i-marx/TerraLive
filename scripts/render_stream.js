@@ -8,12 +8,14 @@ await page.setViewport({width:1920,height:1080,deviceScaleFactor:1});
 const ws=fs.createWriteStream('cap.webm');
 await page.exposeFunction('nodeChunk',b64=>{ws.write(Buffer.from(b64,'base64'));});
 await page.goto('https://i-marx.github.io/TerraLive/demo.html?full=1&rot=1&intro=0&cb=ci'+Date.now(),{waitUntil:'networkidle2',timeout:180000});
-console.log('page loaded, warming textures 75s');
-await new Promise(r=>setTimeout(r,75000));
+console.log('page loaded, warming textures 90s');
+await new Promise(r=>setTimeout(r,90000));
+const gl=await page.evaluate(()=>{const c=document.querySelector('canvas');const g=c.getContext('webgl')||c.getContext('webgl2');return {w:c.width,h:c.height,maxTex:g?g.getParameter(g.MAX_TEXTURE_SIZE):0};});
+console.log('canvas '+JSON.stringify(gl));
 await page.evaluate(()=>{
   const c=document.querySelector('canvas');
-  const st=c.captureStream(12);
-  window.__mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:3000000});
+  const st=c.captureStream(30);
+  window.__mr=new MediaRecorder(st,{mimeType:'video/webm;codecs=vp9',videoBitsPerSecond:6000000});
   window.__mr.ondataavailable=async e=>{
     if(!e.data||!e.data.size)return;
     const u8=new Uint8Array(await e.data.arrayBuffer());
