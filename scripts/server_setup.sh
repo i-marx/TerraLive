@@ -1,6 +1,8 @@
 #!/bin/bash
-# Terra stream server bootstrap v3. Idempotent. Concat-loop edition:
-# continuous timestamps across loops so YouTube never drops the stream.
+# Terra stream server bootstrap v4. Idempotent.
+# Immortal-pusher design: one ffmpeg holds the YouTube connection forever;
+# a feeder loops segments into a pipe. ffmpeg never exits, YouTube never
+# sees a disconnect, the broadcast never ends.
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -23,37 +25,28 @@ fi
 EOF
 cat > /opt/terra/bin/terra-stream.sh <<'EOF'
 #!/bin/bash
-# Concat playlist repeats the same segment 2000x with continuously
-# increasing timestamps. Restart only when a fresh segment arrives.
-mkdir -p /opt/terra/segments
 cd /opt/terra/segments
-while :; do
-  [ -f pending.mp4 ] && mv -f pending.mp4 live.mp4
-  YT_KEY=""
-  [ -f /etc/terra/stream.env ] && . /etc/terra/stream.env
-  if [ -f live.mp4 ] && [ -n "$YT_KEY" ] && [ "$YT_KEY" != "PASTE_KEY_HERE" ]; then
-    : > list.txt
-    for i in $(seq 1 2000); do echo "file '/opt/terra/segments/live.mp4'" >> list.txt; done
-    ffmpeg -hide_banner -loglevel warning -re -f concat -safe 0 -i list.txt -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}" &
-    FPID=$!
-    while kill -0 $FPID 2>/dev/null; do
-      if [ -f pending.mp4 ]; then
-        kill $FPID 2>/dev/null
-        wait $FPID 2>/dev/null
-        break
-      fi
-      sleep 15
-    done
-  else
-    sleep 10
-  fi
-  sleep 2
-done
+YT_KEY=""
+[ -f /etc/terra/stream.env ] && . /etc/terra/stream.env
+if [ -z "$YT_KEY" ] || [ "$YT_KEY" = "PASTE_KEY_HERE" ]; then sleep 30; exit 1; fi
+while [ ! -f live.mp4 ] && [ ! -f pending.mp4 ]; do sleep 10; done
+[ -f pending.mp4 ] && mv -f pending.mp4 live.mp4
+rm -f feed.ts
+mkfifo feed.ts
+(
+  while :; do
+    [ -f pending.mp4 ] && mv -f pending.mp4 live.mp4
+    ffmpeg -hide_banner -loglevel error -re -i live.mp4 -c copy -f mpegts - 2>>/opt/terra/feeder.log
+  done > feed.ts
+) &
+FEED=$!
+trap 'kill $FEED 2>/dev/null' EXIT
+ffmpeg -hide_banner -loglevel warning -fflags +genpts -use_wallclock_as_timestamps 1 -i feed.ts -c copy -f flv "rtmp://a.rtmp.youtube.com/live2/${YT_KEY}"
 EOF
 chmod 0755 /opt/terra/bin/terra-pull.sh /opt/terra/bin/terra-stream.sh
 cat > /etc/systemd/system/terra-stream.service <<'EOF'
 [Unit]
-Description=Terra Earth 24/7 YouTube stream
+Description=Terra Earth 24/7 YouTube stream (immortal pusher)
 After=network-online.target
 Wants=network-online.target
 [Service]
@@ -84,6 +77,6 @@ systemctl enable --now terra-pull.timer
 systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 echo
-echo 'TERRA SERVER READY (v3 concat loop).'
+echo 'TERRA SERVER READY (v4 immortal pusher).'
 echo "Segment present: $(ls /opt/terra/segments/live.mp4 2>/dev/null || echo 'not yet')"
 if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
