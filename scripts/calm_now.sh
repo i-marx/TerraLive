@@ -1,0 +1,5 @@
+#!/bin/bash
+# One-off: slow the current loop 3x (calm rotation) + perfect 540s loop.
+cd /opt/terra/segments || exit 1
+echo "Slowing rotation 3x and rebuilding the loop. Encoding ~10-20 min, the stream keeps playing meanwhile..."
+ffmpeg -y -hide_banner -loglevel error -t 180 -i live.mp4 -filter_complex "[0:v]setpts=3*PTS,fps=30[v]; aevalsrc='0.055*sin(2*PI*55*t)*(0.75+0.25*sin(2*PI*0.031*t)) + 0.038*sin(2*PI*110.4*t)*(0.75+0.25*sin(2*PI*0.047*t+1.3)) + 0.030*sin(2*PI*164.6*t)*(0.72+0.28*sin(2*PI*0.023*t+2.1)) + 0.024*sin(2*PI*221.2*t)*(0.7+0.3*sin(2*PI*0.037*t+0.7)) + 0.012*sin(2*PI*329.6*t)*(0.65+0.35*sin(2*PI*0.019*t+2.8))':s=44100:d=560[dr]; anoisesrc=color=brown:r=44100:d=560:a=0.18[b0]; [b0]lowpass=f=420,volume='0.30+0.16*sin(2*PI*0.013*t)':eval=frame[wa]; [dr][wa]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.70[a]" -map "[v]" -map "[a]" -t 540 -c:v libx264 -preset veryfast -b:v 6000k -maxrate 6000k -bufsize 12000k -g 60 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart calm.tmp.mp4 && mv -f calm.tmp.mp4 pending.mp4 && echo "DONE. The calm loop swaps into the live stream within a few minutes."
