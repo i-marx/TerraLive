@@ -11,7 +11,7 @@ mkdir -p /opt/terra/bin /opt/terra/segments /etc/terra
 touch /etc/terra/stream.env
 cat > /opt/terra/bin/terra-pull.sh <<'EOF'
 #!/bin/bash
-WEBM_URL="https://github.com/i-marx/TerraLive/releases/download/stream/terra_stream_source.webm"
+WEBM_URL="https://raw.githubusercontent.com/i-marx/TerraLive/main/streamsrc/terra_stream_source.webm"
 MP4_URL="https://github.com/i-marx/TerraLive/releases/download/stream/terra_stream_latest.mp4"
 mkdir -p /opt/terra/segments
 cd /opt/terra/segments
@@ -98,6 +98,6 @@ systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 systemctl start terra-pull.service &
 echo
-echo 'TERRA SERVER READY (v6 GPU intake).'
+echo 'TERRA SERVER READY (v6.1 GPU intake).'
 echo 'If a new GPU master exists it is now transcoding in the background (~35 min), then swaps in automatically.'
 if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
