@@ -34,7 +34,7 @@ if [ "$SZ" -ge 5000000 ]; then
   OLDSUM=$(cat src.sum 2>/dev/null || echo none)
   if [ "$NEWSUM" != "$OLDSUM" ]; then
     echo "$(date -u) transcoding new GPU source ($n parts, $SZ bytes)" >> /opt/terra/pull.log
-    ffmpeg -y -hide_banner -loglevel error -i src.tmp -filter_complex "[0:v]scale=1920:1080:flags=lanczos,fps=30,setsar=1,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='Earth live wallpaper Terra · on Google Play':fontsize=16:fontcolor=white@0.10:x=w-tw-24:y=h-th-18[v]; aevalsrc='0.055*sin(2*PI*55*t)*(0.75+0.25*sin(2*PI*0.031*t)) + 0.038*sin(2*PI*110.4*t)*(0.75+0.25*sin(2*PI*0.047*t+1.3)) + 0.030*sin(2*PI*164.6*t)*(0.72+0.28*sin(2*PI*0.023*t+2.1)) + 0.024*sin(2*PI*221.2*t)*(0.7+0.3*sin(2*PI*0.037*t+0.7)) + 0.012*sin(2*PI*329.6*t)*(0.65+0.35*sin(2*PI*0.019*t+2.8))':s=44100:d=700[dr]; anoisesrc=color=brown:r=44100:d=700:a=0.18[b0]; [b0]lowpass=f=420,volume='0.30+0.16*sin(2*PI*0.013*t)':eval=frame[wa]; [dr][wa]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.70[a]" -map "[v]" -map "[a]" -shortest -c:v libx264 -preset veryfast -b:v 6000k -maxrate 6000k -bufsize 12000k -g 60 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart build.mp4 2>>/opt/terra/pull.log
+    ffmpeg -y -hide_banner -loglevel error -i src.tmp -filter_complex "[0:v]scale=1920:1080:flags=lanczos,fps=30,setsar=1,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='Earth live wallpaper Terra · on Google Play':fontsize=16:fontcolor=white@0.10:x=w-tw-24:y=h-th-18[v]; aevalsrc='0.055*sin(2*PI*55*t)*(0.75+0.25*sin(2*PI*0.031*t)) + 0.038*sin(2*PI*110.4*t)*(0.75+0.25*sin(2*PI*0.047*t+1.3)) + 0.030*sin(2*PI*164.6*t)*(0.72+0.28*sin(2*PI*0.023*t+2.1)) + 0.024*sin(2*PI*221.2*t)*(0.7+0.3*sin(2*PI*0.037*t+0.7)) + 0.012*sin(2*PI*329.6*t)*(0.65+0.35*sin(2*PI*0.019*t+2.8))':s=44100:d=700[dr]; anoisesrc=color=brown:r=44100:d=700:a=0.18[b0]; [b0]lowpass=f=420,volume='0.30+0.16*sin(2*PI*0.013*t)':eval=frame[wa]; [dr][wa]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.70[a]" -map "[v]" -map "[a]" -shortest -c:v libx264 -preset veryfast -b:v 6000k -maxrate 6000k -bufsize 12000k -g 60 -pix_fmt yuv420p -c:a aac -b:a 128k -t 180 -movflags +faststart build.mp4 2>>/opt/terra/pull.log
     if [ -s build.mp4 ]; then
       mv -f build.mp4 pending.mp4
       echo "$NEWSUM" > src.sum
@@ -103,12 +103,13 @@ OnUnitActiveSec=30min
 [Install]
 WantedBy=timers.target
 EOF
+rm -f /opt/terra/segments/src.sum
 systemctl daemon-reload
 systemctl enable --now terra-pull.timer
 systemctl enable --now terra-stream.service
 systemctl restart terra-stream.service
 systemctl start terra-pull.service &
 echo
-echo 'TERRA SERVER READY (v6.3 sliced intake).'
-echo 'If a new GPU master exists it is now transcoding in the background (~35 min), then swaps in automatically.'
+echo 'TERRA SERVER READY (v6.4 seamless loop).'
+echo 'If a new GPU master exists it is now transcoding in the background (~10-35 min), then swaps in automatically.'
 if grep -q 'YT_KEY=.' /etc/terra/stream.env 2>/dev/null; then echo 'Stream key set: YES'; else echo 'Stream key set: NO'; fi
