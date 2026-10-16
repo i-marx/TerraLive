@@ -1,15 +1,10 @@
 name: stream-render
 on:
-  push:
-    paths:
-      - "stream-trigger"
   workflow_dispatch:
     inputs:
       frames:
         description: frames to render (12fps timeline)
         default: "3000"
-  schedule:
-    - cron: "15 1,7,13,19 * * *"
 permissions:
   contents: write
 jobs:
