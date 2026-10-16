@@ -8,6 +8,7 @@ D=/opt/terra/rtest
 mkdir -p "$D"; cd "$D"
 apt-get install -y -qq nodejs npm fonts-liberation libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 >/dev/null 2>&1
 [ -d node_modules/puppeteer ] || { npm init -y >/dev/null 2>&1; npm i --silent puppeteer pngjs >/dev/null 2>&1; }
+npx puppeteer browsers install chrome >/dev/null 2>&1 || npx puppeteer browsers install chrome
 cat > rt.js <<'EOF'
 const puppeteer = require('puppeteer');
 const fs = require('fs');
