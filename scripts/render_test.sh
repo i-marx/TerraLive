@@ -8,10 +8,17 @@ D=/opt/terra/rtest
 mkdir -p "$D"; cd "$D"
 apt-get -o DPkg::Lock::Timeout=120 install -y -qq unzip nodejs npm fonts-liberation libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 >/dev/null 2>&1
 [ -d node_modules/puppeteer ] || { npm init -y >/dev/null 2>&1; npm i --silent puppeteer pngjs >/dev/null 2>&1; }
-[ -d node_modules/yauzl ] || npm i --silent yauzl >/dev/null 2>&1
-CHROME_BIN=$(find /root/.cache/puppeteer -name chrome -type f 2>/dev/null | head -1)
-[ -z "$CHROME_BIN" ] && rm -rf /root/.cache/puppeteer
-node node_modules/puppeteer/install.mjs || { rm -rf /root/.cache/puppeteer; node node_modules/puppeteer/install.mjs; }
+V=155.0.8059.79
+DEST="/root/.cache/puppeteer/chrome/linux-$V"
+if [ ! -x "$DEST/chrome-linux64/chrome" ]; then
+  echo "Fetching Chrome $V directly from Google..."
+  rm -rf "$DEST"; mkdir -p "$DEST"
+  curl -fSL -o /tmp/cft.zip "https://storage.googleapis.com/chrome-for-testing-public/$V/linux64/chrome-linux64.zip" || { echo "VERDICT ERROR chrome download failed"; exit 1; }
+  python3 -c "import zipfile; zipfile.ZipFile('/tmp/cft.zip').extractall('$DEST')" || { echo "VERDICT ERROR unzip failed"; exit 1; }
+  chmod -R a+rx "$DEST"
+  rm -f /tmp/cft.zip
+fi
+echo "Chrome binary: $(ls -la $DEST/chrome-linux64/chrome 2>/dev/null | head -1)"
 cat > rt.js <<'EOF'
 const puppeteer = require('puppeteer');
 const fs = require('fs');
