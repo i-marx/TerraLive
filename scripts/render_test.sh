@@ -6,8 +6,9 @@ set -u
 export DEBIAN_FRONTEND=noninteractive
 D=/opt/terra/rtest
 mkdir -p "$D"; cd "$D"
-apt-get install -y -qq unzip nodejs npm fonts-liberation libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 >/dev/null 2>&1
+apt-get -o DPkg::Lock::Timeout=120 install -y -qq unzip nodejs npm fonts-liberation libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libgtk-3-0 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 >/dev/null 2>&1
 [ -d node_modules/puppeteer ] || { npm init -y >/dev/null 2>&1; npm i --silent puppeteer pngjs >/dev/null 2>&1; }
+[ -d node_modules/yauzl ] || npm i --silent yauzl >/dev/null 2>&1
 CHROME_BIN=$(find /root/.cache/puppeteer -name chrome -type f 2>/dev/null | head -1)
 [ -z "$CHROME_BIN" ] && rm -rf /root/.cache/puppeteer
 node node_modules/puppeteer/install.mjs || { rm -rf /root/.cache/puppeteer; node node_modules/puppeteer/install.mjs; }
