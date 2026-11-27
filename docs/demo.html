@@ -893,6 +893,8 @@ function fetchPolarClouds(){ try{
         if(!Array.isArray(arr)||arr.length<GA*GO) return null;
         const v=new Float32Array(GA*GO);
         for(let q=0;q<GA*GO;q++) v[q]=arr[q]&&arr[q].current? arr[q].current.cloud_cover : 0;
+        let s9=0; for(let q=0;q<GA*GO;q++) s9+=v[q];
+        if(s9/(GA*GO) < 1) return null;   /* an (almost) all-zero polar grid is missing data, not clear skies */
         return {ga:GA, go:GO, v:v}; }); };
   Promise.all([mk(1), mk(-1)]).then(function(ps){
     if(ps[0]) _polarCld.n=ps[0]; if(ps[1]) _polarCld.s=ps[1];
