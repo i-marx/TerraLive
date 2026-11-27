@@ -21,6 +21,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -38,7 +40,7 @@ class MainActivity : AppCompatActivity() {
             if (granted) { if (pendingMode == "skyloc") applySkyLocation() else applyMode(pendingMode) }
             else {
                 Wallpapers.setMode(this, "full")
-                Toast.makeText(this, "Location permission is needed to centre Earth on your place", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(R.string.toast_loc_perm), Toast.LENGTH_LONG).show()
                 refreshSheet()
             }
         }
@@ -60,7 +62,7 @@ class MainActivity : AppCompatActivity() {
             Wallpapers.setMode(this, mode, loc.latitude, loc.longitude)
         } else {
             Wallpapers.setMode(this, mode)
-            Toast.makeText(this, "Getting your location - open Maps once, then re-select", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_loc_wait), Toast.LENGTH_LONG).show()
         }
         refreshSheet()
     }
@@ -84,11 +86,9 @@ class MainActivity : AppCompatActivity() {
         bg.settings.allowUniversalAccessFromFileURLs = true
         bg.settings.allowFileAccess = true
         bg.loadUrl("file:///android_asset/wallpapers/earth/index.html?look=3&motion=0&wake=0&intro=0")
-        if (Build.VERSION.SDK_INT >= 31) {
-            bg.setRenderEffect(RenderEffect.createBlurEffect(55f, 55f, Shader.TileMode.CLAMP))
-        } else {
-            findViewById<View>(R.id.bgScrim).setBackgroundColor(Color.parseColor("#E0030507"))
-        }
+        /* First 2 minutes: the live planet IS the first screen. No blur; the
+           layout scrim keeps the text readable while the real engine runs behind. */
+        setupLangChip()
 
         listView = findViewById(R.id.wallpaperList)
         renderList()
@@ -127,6 +127,28 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    private val langTags = listOf("en", "lt", "lv", "et", "pl", "de", "fr", "es", "it", "pt-BR", "ja", "ko", "tr", "id", "nl")
+
+    private fun setupLangChip() {
+        val chip = findViewById<TextView>(R.id.langChip)
+        val cur = AppCompatDelegate.getApplicationLocales()
+        val tag = if (!cur.isEmpty) cur.toLanguageTags().split(",")[0]
+                  else java.util.Locale.getDefault().toLanguageTag()
+        chip.text = tag.split("-")[0].uppercase(java.util.Locale.ROOT)
+        chip.setOnClickListener {
+            val names = langTags.map { tg ->
+                val l = java.util.Locale.forLanguageTag(tg)
+                l.getDisplayName(l).replaceFirstChar { c -> c.titlecase(l) }
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.language))
+                .setItems(names.toTypedArray()) { _, i ->
+                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(langTags[i]))
+                }
+                .show()
+        }
+    }
+
     private fun dp(v: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics).toInt()
 
@@ -161,7 +183,7 @@ class MainActivity : AppCompatActivity() {
                 setPadding(dp(22f), dp(20f), dp(22f), dp(20f))
             }
             inner.addView(TextView(this).apply {
-                text = w.title
+                text = getString(w.titleRes)
                 setTextColor(ContextCompat.getColor(this@MainActivity,
                     if (selected) R.color.aero_ice else R.color.aero_text))
                 textSize = 17f
@@ -169,13 +191,13 @@ class MainActivity : AppCompatActivity() {
                 light(this)
             })
             inner.addView(TextView(this).apply {
-                text = w.subtitle
+                text = getString(w.subtitleRes)
                 setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_dim))
                 textSize = 13f
                 setPadding(0, dp(4f), 0, 0)
             })
             inner.addView(TextView(this).apply {
-                text = "Tap to configure"
+                text = getString(R.string.tap_to_configure)
                 setTextColor(ContextCompat.getColor(this@MainActivity, R.color.aero_text_faint))
                 textSize = 11f
                 letterSpacing = 0.10f
@@ -291,7 +313,7 @@ class MainActivity : AppCompatActivity() {
         })
         row.addView(col)
         row.addView(TextView(this).apply {
-            text = if (on) "ON" else "OFF"
+            text = if (on) getString(R.string.label_on) else getString(R.string.label_off)
             setTextColor(ContextCompat.getColor(this@MainActivity,
                 if (on) R.color.aero_ice else R.color.aero_text_faint))
             textSize = 12f
@@ -304,29 +326,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun fillSheet(body: LinearLayout) {
         if (Wallpapers.selected(this) == "sky") { fillSkySheet(body); return }
-        body.addView(sheetTitle("EARTH"))
+        body.addView(sheetTitle(getString(R.string.sheet_earth)))
         val currentMode0 = Wallpapers.viewMode(this)
         val currentMode1 = if (currentMode0 == "locked") "closeup" else currentMode0
         val currentMode = if (currentMode1 == "sky") "full" else currentMode1
-        sectionLabel(body, "VIEW")
+        sectionLabel(body, getString(R.string.section_view))
         val planetModes = listOf(
-            Triple("full", "Full view", "Earth from deep space, real day and night"),
-            Triple("closeup", "Close-up over my place", "Low orbit above your home, ultra-HD terrain")
+            Triple("full", getString(R.string.mode_full), getString(R.string.mode_full_sub)),
+            Triple("closeup", getString(R.string.mode_closeup), getString(R.string.mode_closeup_sub))
         )
         for ((id, title, sub) in planetModes) {
             val on = id == currentMode
             body.addView(optionCard(on, title, sub) { selectMode(id) })
         }
-        sectionLabel(body, "EFFECTS")
+        sectionLabel(body, getString(R.string.section_effects))
         val p = Wallpapers.prefs(this)
         val motionOn = p.getBoolean(Wallpapers.KEY_MOTION, true)
-        body.addView(optionCard(motionOn, "Parallax on tilt",
-            "The planet shifts subtly as you move your phone") {
+        body.addView(optionCard(motionOn, getString(R.string.fx_parallax),
+            getString(R.string.fx_parallax_sub)) {
             p.edit().putBoolean(Wallpapers.KEY_MOTION, !motionOn).apply(); refreshSheet()
         })
         val rotOn = p.getBoolean(Wallpapers.KEY_ROT, false)
-        body.addView(optionCard(rotOn, "Slow rotation",
-            "The planet turns gently on its axis (full view)") {
+        body.addView(optionCard(rotOn, getString(R.string.fx_rotation),
+            getString(R.string.fx_rotation_sub)) {
             p.edit().putBoolean(Wallpapers.KEY_ROT, !rotOn).apply(); refreshSheet()
         })
         addVersionFooter(body)
@@ -341,29 +363,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fillSkySheet(body: LinearLayout) {
-        body.addView(sheetTitle("SKY VIEW"))
+        body.addView(sheetTitle(getString(R.string.sheet_sky)))
         val p = Wallpapers.prefs(this)
-        sectionLabel(body, "YOUR SKY")
+        sectionLabel(body, getString(R.string.section_your_sky))
         val hasLoc = !p.getFloat(Wallpapers.KEY_LAT, Float.NaN).isNaN()
         body.addView(optionCard(hasLoc,
-            if (hasLoc) "Location set" else "Use my location",
-            if (hasLoc) "The sky follows your real position. Tap to refresh"
-            else "Needed so the sky above matches yours") { requestSkyLocation() })
-        sectionLabel(body, "ABOVE YOU")
+            if (hasLoc) getString(R.string.sky_loc_set) else getString(R.string.sky_loc_use),
+            if (hasLoc) getString(R.string.sky_loc_set_sub)
+            else getString(R.string.sky_loc_need_sub)) { requestSkyLocation() })
+        sectionLabel(body, getString(R.string.section_above_you))
         val satsOn = p.getBoolean(Wallpapers.KEY_SKY_SATS, true)
-        body.addView(optionCard(satsOn, "Satellites",
-            "The real ISS crossing your sky, only when it is truly visible") {
+        body.addView(optionCard(satsOn, getString(R.string.sky_sats),
+            getString(R.string.sky_sats_sub)) {
             p.edit().putBoolean(Wallpapers.KEY_SKY_SATS, !satsOn).apply(); refreshSheet()
         })
         val plnOn = p.getBoolean(Wallpapers.KEY_SKY_PLANES, true)
-        body.addView(optionCard(plnOn, "Aircraft overhead",
-            "Live planes above you right now, as moving lights") {
+        body.addView(optionCard(plnOn, getString(R.string.sky_planes),
+            getString(R.string.sky_planes_sub)) {
             p.edit().putBoolean(Wallpapers.KEY_SKY_PLANES, !plnOn).apply(); refreshSheet()
         })
-        sectionLabel(body, "EFFECTS")
+        sectionLabel(body, getString(R.string.section_effects))
         val motionOn = p.getBoolean(Wallpapers.KEY_MOTION, true)
-        body.addView(optionCard(motionOn, "Parallax on tilt",
-            "Your view drifts gently as you move the phone") {
+        body.addView(optionCard(motionOn, getString(R.string.fx_parallax),
+            getString(R.string.fx_parallax_sub)) {
             p.edit().putBoolean(Wallpapers.KEY_MOTION, !motionOn).apply(); refreshSheet()
         })
         addVersionFooter(body)
@@ -392,7 +414,7 @@ class MainActivity : AppCompatActivity() {
                 ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
         } catch (e: Exception) { null }
         if (loc != null) Wallpapers.setLocation(this, loc.latitude, loc.longitude)
-        else Toast.makeText(this, "Getting your location. Open Maps once, then tap again", Toast.LENGTH_LONG).show()
+        else Toast.makeText(this, getString(R.string.toast_loc_wait2), Toast.LENGTH_LONG).show()
         refreshSheet()
     }
 }
