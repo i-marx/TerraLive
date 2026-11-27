@@ -983,7 +983,16 @@ function loadCloudsLive(){
               return;
             }
             res(texFromCloudCanvas(r.cv));
-          }catch(e){ res(null); }
+          }catch(e){
+            /* repair failed (for example a security-restricted canvas): still
+               never ship bare poles: minimal canvas + polar conditioning */
+            try{
+              const cv=document.createElement('canvas'); cv.width=im.width; cv.height=im.height;
+              cv.getContext('2d').drawImage(im,0,0);
+              __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84);
+              res(texFromCloudCanvas(cv));
+            }catch(e2){ res(null); }
+          }
         });
       };
       im.onerror=function(){ tryOne(i+1); };
@@ -996,6 +1005,14 @@ function loadClouds(){
   return loadCloudsLive().then(t=>{
     if(t){ liveClouds = true; return t; }
     return loadTex(URLS.clouds).then(function(st){
+      /* static fallback clouds have bare poles: condition them like the live
+         pipeline does, so no path ever shows a cloudless polar hole */
+      if(st && st.image){ try{
+        const cv=document.createElement('canvas'); cv.width=st.image.width; cv.height=st.image.height;
+        cv.getContext('2d').drawImage(st.image,0,0);
+        __polarConditionTL(cv,true,76,84); __polarConditionTL(cv,false,76,84);
+        return texFromCloudCanvas(cv);
+      }catch(e){} }
       if(st) return st;
       /* fully offline: resurrect the last good satellite clouds from the device cache */
       return new Promise(function(res){
