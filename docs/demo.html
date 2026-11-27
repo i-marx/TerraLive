@@ -99,6 +99,9 @@ const CFG = {
     if(CFG.demo) CFG.intro = 0;
     CFG.glint = 1;
     if(q.has('glint')) CFG.glint = q.get('glint')==='0' ? 0 : 1;
+    /* the 20s intro flight plays at most once per 6 hours; WebView rebuilds and
+       reloads must not replay it every time the user comes home */
+    try{ if(CFG.intro){ var _il = +localStorage.getItem('terra_intro_ts') || 0; if(Date.now() - _il < 6*3600*1000){ CFG.intro = 0; } else { localStorage.setItem('terra_intro_ts', '' + Date.now()); } } }catch(e){}
     /* --- hidden marketing demo mode: ?demo=1 compresses demoHours into
        demoDur seconds with an ease-in-out sweep; ?record=1 self-records --- */
     if(q.get('demo') === '1'){
