@@ -30,13 +30,12 @@ object Wallpapers {
             "earth",
             "The Planet",
             "Earth from orbit in real time — live clouds, true night sky, real Moon"
-        )
-        /* hidden until its clouds are real — the promise must be true before it returns:
-        ,WallpaperInfo(
+        ),
+        WallpaperInfo(
             "sky",
             "Sky View",
             "The sky above you, live: real clouds, rain and snow, planes, the ISS, a night with zero light pollution"
-        ) */
+        )
         /* hidden until refined — flip this back on in an update:
         ,WallpaperInfo(
             "clouds",
