@@ -67,6 +67,17 @@ class EarthWallpaperService : WallpaperService() {
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
+            /* Reuse the living scene whenever possible: rebuilding the WebView on
+               every surface change forced a full page reload (and the 20s intro)
+               each time the user returned to the home screen. */
+            val vd = virtualDisplay
+            if (vd != null && webView != null) {
+                try {
+                    vd.setSurface(holder.surface)
+                    vd.resize(width, height, resources.displayMetrics.densityDpi)
+                    return
+                } catch (_: Exception) { /* fall through to a clean rebuild */ }
+            }
             release()
             val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
             virtualDisplay = dm.createVirtualDisplay(
@@ -97,7 +108,9 @@ class EarthWallpaperService : WallpaperService() {
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
-            release()
+            /* Detach from the dying surface but keep the scene alive; the next
+               onSurfaceChanged re-attaches it with no reload. */
+            try { virtualDisplay?.setSurface(null) } catch (_: Exception) { release() }
             super.onSurfaceDestroyed(holder)
         }
 
