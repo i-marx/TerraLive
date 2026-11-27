@@ -1,11 +1,44 @@
 <resources>
-    <string name="app_name">Terra Live Wallpapers</string>
-    <string name="brand_word">TERRA</string>
-    <string name="brand_sub">LIVE WALLPAPERS</string>
+    <string name="app_name" translatable="false">Terra Live Wallpapers</string>
+    <string name="brand_word" translatable="false">TERRA</string>
+    <string name="brand_sub" translatable="false">LIVE WALLPAPERS</string>
     <string name="tagline">Your planet. In real time.</string>
     <string name="set_wallpaper">Set as Live Wallpaper</string>
     <string name="footnote">Real sunlight &#183; live satellite clouds &#183; true night sky &#183; real Moon</string>
-    <string name="wallpaper_name">Terra &#8212; Real-Time Earth</string>
+    <string name="wallpaper_name">Terra: Real-Time Earth</string>
     <string name="wallpaper_description">Ultra-realistic Earth driven by your clock: real rotation, live clouds, real Moon and the true night sky.</string>
-    <string name="coming_soon">More worlds coming soon — oceans, mountains, skies&#8230;</string>
+    <string name="coming_soon">More worlds coming soon: oceans, mountains, skies&#8230;</string>
+    <string name="tap_to_configure">Tap to configure</string>
+    <string name="label_on">ON</string>
+    <string name="label_off">OFF</string>
+    <string name="sheet_earth">EARTH</string>
+    <string name="section_view">VIEW</string>
+    <string name="mode_full">Full view</string>
+    <string name="mode_full_sub">Earth from deep space, real day and night</string>
+    <string name="mode_closeup">Close-up over my place</string>
+    <string name="mode_closeup_sub">Low orbit above your home, ultra-HD terrain</string>
+    <string name="section_effects">EFFECTS</string>
+    <string name="fx_parallax">Parallax on tilt</string>
+    <string name="fx_parallax_sub">The planet shifts subtly as you move your phone</string>
+    <string name="fx_rotation">Slow rotation</string>
+    <string name="fx_rotation_sub">The planet turns gently on its axis (full view)</string>
+    <string name="sheet_sky">SKY VIEW</string>
+    <string name="section_your_sky">YOUR SKY</string>
+    <string name="sky_loc_set">Location set</string>
+    <string name="sky_loc_use">Use my location</string>
+    <string name="sky_loc_set_sub">The sky follows your real position. Tap to refresh</string>
+    <string name="sky_loc_need_sub">Needed so the sky above matches yours</string>
+    <string name="section_above_you">ABOVE YOU</string>
+    <string name="sky_sats">Satellites</string>
+    <string name="sky_sats_sub">The real ISS crossing your sky, only when it is truly visible</string>
+    <string name="sky_planes">Aircraft overhead</string>
+    <string name="sky_planes_sub">Live planes above you right now, as moving lights</string>
+    <string name="toast_loc_perm">Location permission is needed to centre Earth on your place</string>
+    <string name="toast_loc_wait">Getting your location. Open Maps once, then re-select</string>
+    <string name="toast_loc_wait2">Getting your location. Open Maps once, then tap again</string>
+    <string name="wp_earth_title">The Planet</string>
+    <string name="wp_earth_sub">Earth from orbit in real time: live clouds, true night sky, real Moon</string>
+    <string name="wp_sky_title">Sky View</string>
+    <string name="wp_sky_sub">The sky above you, live: real clouds, rain and snow, planes, the ISS, a night with zero light pollution</string>
+    <string name="language">Language</string>
 </resources>
