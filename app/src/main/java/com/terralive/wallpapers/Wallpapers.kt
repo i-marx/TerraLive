@@ -2,7 +2,7 @@ package com.terralive.wallpapers
 
 import android.content.Context
 
-data class WallpaperInfo(val id: String, val title: String, val subtitle: String)
+data class WallpaperInfo(val id: String, val titleRes: Int, val subtitleRes: Int)
 
 /**
  * The wallpaper catalog. To add a new live wallpaper later:
@@ -26,11 +26,12 @@ object Wallpapers {
     private const val DEFAULT = "earth"
 
     val ALL = listOf(
-        WallpaperInfo(
-            "earth",
-            "The Planet",
-            "Earth from orbit in real time — live clouds, true night sky, real Moon"
-        ),
+        WallpaperInfo("earth", R.string.wp_earth_title, R.string.wp_earth_sub),
+        WallpaperInfo("sky", R.string.wp_sky_title, R.string.wp_sky_sub)
+        /* hidden until refined:
+        ,WallpaperInfo("clouds", R.string.wp_earth_title, R.string.wp_earth_sub) */
+        // coming soon: more places on Earth - oceans, mountains, rain...
+    ),
         WallpaperInfo(
             "sky",
             "Sky View",
