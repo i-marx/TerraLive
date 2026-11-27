@@ -30,12 +30,13 @@ object Wallpapers {
             "earth",
             "The Planet",
             "Earth from orbit in real time — live clouds, true night sky, real Moon"
-        ),
-        WallpaperInfo(
+        )
+        /* hidden until its clouds are real — the promise must be true before it returns:
+        ,WallpaperInfo(
             "sky",
             "Sky View",
             "The sky above you, live: real clouds, rain and snow, planes, the ISS, a night with zero light pollution"
-        )
+        ) */
         /* hidden until refined — flip this back on in an update:
         ,WallpaperInfo(
             "clouds",
@@ -95,8 +96,11 @@ object Wallpapers {
 
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun selected(ctx: Context): String =
-        prefs(ctx).getString(KEY_SELECTED, DEFAULT) ?: DEFAULT
+    fun selected(ctx: Context): String {
+        val id = prefs(ctx).getString(KEY_SELECTED, DEFAULT) ?: DEFAULT
+        /* if a previously selected wallpaper is no longer in the catalog, fall back */
+        return if (ALL.any { it.id == id }) id else DEFAULT
+    }
 
     fun select(ctx: Context, id: String) {
         prefs(ctx).edit().putString(KEY_SELECTED, id).apply()
