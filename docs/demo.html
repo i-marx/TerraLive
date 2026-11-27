@@ -1725,6 +1725,7 @@ if(CFG.mode==='sky'){ try{
       '}'].join('\n')});
   const skyDome=new THREE.Mesh(new THREE.SphereGeometry(40,64,32), skyMat);
   scene.add(skyDome);
+  skyDome.renderOrder=-1;   /* paint the sky gradient FIRST: it tied with the cloud shell on depth-sort and was covering the baked clouds (the "sky view has no clouds" bug) */
   cloudMat.side=THREE.DoubleSide;
   cloudUniforms.uSky.value=1.0;
 }catch(e){} }
