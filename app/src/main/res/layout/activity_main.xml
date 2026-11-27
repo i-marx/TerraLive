@@ -99,4 +99,21 @@
             android:textSize="10sp"
             android:letterSpacing="0.06" />
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/langChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="46dp"
+        android:layout_marginEnd="20dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:textColor="@color/aero_text"
+        android:textSize="11sp"
+        android:letterSpacing="0.15"
+        android:fontFamily="sans-serif-medium"
+        android:background="@drawable/bg_chip" />
 </FrameLayout>
