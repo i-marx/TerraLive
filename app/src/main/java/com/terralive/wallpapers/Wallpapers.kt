@@ -28,22 +28,7 @@ object Wallpapers {
     val ALL = listOf(
         WallpaperInfo("earth", R.string.wp_earth_title, R.string.wp_earth_sub),
         WallpaperInfo("sky", R.string.wp_sky_title, R.string.wp_sky_sub)
-        /* hidden until refined:
-        ,WallpaperInfo("clouds", R.string.wp_earth_title, R.string.wp_earth_sub) */
         // coming soon: more places on Earth - oceans, mountains, rain...
-    ),
-        WallpaperInfo(
-            "sky",
-            "Sky View",
-            "The sky above you, live: real clouds, rain and snow, planes, the ISS, a night with zero light pollution"
-        )
-        /* hidden until refined — flip this back on in an update:
-        ,WallpaperInfo(
-            "clouds",
-            "Drifting Clouds",
-            "Volumetric ray-marched cumulus at true drift speed — real 24-hour sky, stars and moon at night"
-        ) */
-        // coming soon: more places on Earth — oceans, mountains, rain...
     )
 
     fun assetUrl(id: String) = "file:///android_asset/wallpapers/$id/index.html"
